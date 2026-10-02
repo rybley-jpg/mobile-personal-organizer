@@ -1,5 +1,5 @@
+// rail-status v5a: prefix-variant station search
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// rail-status: station selection + train matching v2
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -109,6 +109,10 @@ function isHbf(name: string): boolean {
   return /hbf/i.test(name);
 }
 
+function normalizeForMatching(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/[^a-z]/g, '');
+}
+
 async function findStation(query: string): Promise<StationParseResult> {
   const result = await dbFetch(`/station/${encodeURIComponent(query)}`);
   if (!result || !result.ok) {
@@ -132,6 +136,10 @@ async function findStation(query: string): Promise<StationParseResult> {
   if (exact) return { station: exact, ambiguous: null };
 
   if (queryHasHbf && !queryHasTief) {
+    const queryCityHbf = normalizeForMatching(query);
+    const directMatch = all.find(s => !isSubordinateStation(s.name) && normalizeForMatching(s.name) === queryCityHbf);
+    if (directMatch) return { station: directMatch, ambiguous: null };
+
     const hbfStations = all.filter(s => isHbf(s.name));
     if (hbfStations.length === 1) return { station: hbfStations[0], ambiguous: null };
     if (hbfStations.length > 1) {
@@ -144,18 +152,27 @@ async function findStation(query: string): Promise<StationParseResult> {
 
     const cityMatch = query.match(/^(.+?)\s*hbf/i);
     if (cityMatch) {
-      const cityQuery = cityMatch[1].trim();
-      const cityResult = await dbFetch(`/station/${encodeURIComponent(cityQuery)}`);
-      if (cityResult && cityResult.ok) {
-        const cityAll = parseAllStations(cityResult.text);
-        const cityHbf = cityAll.filter(s => isHbf(s.name));
-        if (cityHbf.length === 1) return { station: cityHbf[0], ambiguous: null };
-        if (cityHbf.length > 1) {
-          const sorted = [...cityHbf].sort((a, b) => a.name.length - b.name.length);
-          if (sorted[0].name.length < sorted[1].name.length) {
-            return { station: sorted[0], ambiguous: null };
+      const searchVariants = [
+        cityMatch[1].trim(),
+        query.replace(/\s+/g, ''),
+        cityMatch[1].trim() + '(',
+      ];
+      for (const variant of searchVariants) {
+        const variantResult = await dbFetch(`/station/${encodeURIComponent(variant)}`);
+        if (variantResult && variantResult.ok) {
+          const variantAll = parseAllStations(variantResult.text);
+          const variantDirectMatch = variantAll.find(s => !isSubordinateStation(s.name) && normalizeForMatching(s.name) === queryCityHbf);
+          if (variantDirectMatch) return { station: variantDirectMatch, ambiguous: null };
+
+          const variantHbf = variantAll.filter(s => isHbf(s.name));
+          if (variantHbf.length === 1) return { station: variantHbf[0], ambiguous: null };
+          if (variantHbf.length > 1) {
+            const sorted = [...variantHbf].sort((a, b) => a.name.length - b.name.length);
+            if (sorted[0].name.length < sorted[1].name.length) {
+              return { station: sorted[0], ambiguous: null };
+            }
+            return { station: null, ambiguous: variantHbf };
           }
-          return { station: null, ambiguous: cityHbf };
         }
       }
     }
