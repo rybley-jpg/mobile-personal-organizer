@@ -7,8 +7,6 @@ const corsHeaders = {
 };
 
 const DB_API_BASE = "https://apis.deutschebahn.com/db-api-marketplace/apis/timetables/v1";
-const DB_TOKEN_URL = "https://api.deutschebahn.com/konfigurator-api/oauth2/token";
-// v2: credential whitespace + charset diagnostics
 
 let lastDiagnostic: { step: string; detail: string } | null = null;
 
@@ -16,104 +14,19 @@ function isDbConfigured(): boolean {
   return !!(Deno.env.get("DB_API_CLIENT_ID") && Deno.env.get("DB_API_CLIENT_SECRET"));
 }
 
-interface CachedToken {
-  token: string;
-  expiresAt: number;
-}
-
-let cachedToken: CachedToken | null = null;
-
-async function getDbAccessToken(): Promise<string | null> {
-  const clientId = Deno.env.get("DB_API_CLIENT_ID");
-  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
-
-  if (!clientId || !clientSecret) {
-    lastDiagnostic = { step: "token", detail: "Secrets DB_API_CLIENT_ID oder DB_API_CLIENT_SECRET fehlen" };
-    return null;
-  }
-
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-    return cachedToken.token;
-  }
-
-  const trimmedId = clientId.trim();
-  const trimmedSecret = clientSecret.trim();
-
-  const tokenUrls = [
-    "https://api.deutschebahn.com/konfigurator-api/oauth2/token",
-    "https://apis.deutschebahn.com/konfigurator-api/oauth2/token",
-  ];
-
-  for (const tokenUrl of tokenUrls) {
-    try {
-      const basicAuth = btoa(`${trimmedId}:${trimmedSecret}`);
-      const body = new URLSearchParams({ grant_type: "client_credentials" });
-
-      let res = await fetch(tokenUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Authorization": `Basic ${basicAuth}`,
-        },
-        body,
-      });
-
-      if (!res.ok) {
-        res = await fetch(tokenUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            grant_type: "client_credentials",
-            client_id: trimmedId,
-            client_secret: trimmedSecret,
-          }),
-        });
-      }
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        lastDiagnostic = { step: `token (${tokenUrl})`, detail: `HTTP ${res.status}: ${errText.slice(0, 300)}` };
-        continue;
-      }
-
-      const data = await res.json();
-      const token = data?.access_token;
-      if (!token) {
-        lastDiagnostic = { step: `token (${tokenUrl})`, detail: `Kein access_token: ${JSON.stringify(data).slice(0, 300)}` };
-        continue;
-      }
-
-      const expiresIn = data?.expires_in ?? 3600;
-      cachedToken = { token, expiresAt: Date.now() + expiresIn * 1000 };
-      lastDiagnostic = null;
-      return token;
-    } catch (err) {
-      lastDiagnostic = { step: `token (${tokenUrl})`, detail: `Exception: ${err instanceof Error ? err.message : String(err)}` };
-      continue;
-    }
-  }
-
-  return null;
-}
-
 async function dbFetch(path: string): Promise<{ ok: boolean; status: number; text: string } | null> {
-  const clientId = Deno.env.get("DB_API_CLIENT_ID");
-  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
+  const clientId = Deno.env.get("DB_API_CLIENT_ID")?.trim();
+  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET")?.trim();
   if (!clientId || !clientSecret) return null;
 
-  const token = await getDbAccessToken();
-
-  const headers: Record<string, string> = { Accept: "application/xml" };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  } else {
-    headers["Authorization"] = `Basic ${btoa(`${clientId.trim()}:${clientSecret.trim()}`)}`;
-  }
-
   try {
-    const res = await fetch(`${DB_API_BASE}${path}`, { headers });
+    const res = await fetch(`${DB_API_BASE}${path}`, {
+      headers: {
+        "DB-Client-Id": clientId,
+        "DB-Api-Key": clientSecret,
+        "Accept": "application/xml",
+      },
+    });
     const text = await res.text();
     if (!res.ok) {
       lastDiagnostic = { step: `fetch ${path}`, detail: `HTTP ${res.status}: ${text.slice(0, 300)}` };
@@ -304,7 +217,7 @@ Deno.serve(async (req: Request) => {
     if (!isDbConfigured()) {
       return new Response(JSON.stringify({
         error: "db_api_not_configured",
-        message: "DB API ist nicht konfiguriert. Es werden DB_API_CLIENT_ID und DB_API_CLIENT_SECRET als Secrets benötigt.",
+        message: "DB API ist nicht konfiguriert.",
       }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -315,29 +228,6 @@ Deno.serve(async (req: Request) => {
     const debug = url.searchParams.get("debug") === "1";
 
     if (!trainNumber || !date) {
-      if (debug) {
-        const cid = Deno.env.get("DB_API_CLIENT_ID");
-        const cs = Deno.env.get("DB_API_CLIENT_SECRET");
-        const trimmedId = (cid ?? "").trim();
-        const trimmedSecret = (cs ?? "").trim();
-        const idBytes = Array.from(trimmedId).map((c) => c.charCodeAt(0));
-        const secretBytes = Array.from(trimmedSecret).map((c) => c.charCodeAt(0));
-        const hasNonAsciiId = idBytes.some((b) => b > 127);
-        const hasNonAsciiSecret = secretBytes.some((b) => b > 127);
-        return new Response(JSON.stringify({
-          debug: true,
-          clientIdLength: cid?.length ?? 0,
-          clientSecretLength: cs?.length ?? 0,
-          trimmedIdLength: trimmedId.length,
-          trimmedSecretLength: trimmedSecret.length,
-          hasWhitespaceId: cid !== trimmedId,
-          hasWhitespaceSecret: cs !== trimmedSecret,
-          hasNonAsciiId,
-          hasNonAsciiSecret,
-          idCharCodes: idBytes,
-          secretCharCodes: secretBytes,
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
       return new Response(JSON.stringify({
         error: "Parameter train und date erforderlich",
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -356,18 +246,23 @@ Deno.serve(async (req: Request) => {
       }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // DB Timetables API expects date in YYMMDD format (2-digit year)
     const dateObj = new Date(date + "T00:00:00");
-    const year = dateObj.getFullYear();
+    const yy = String(dateObj.getFullYear()).slice(-2);
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
-    const dbDate = `${year}${month}${day}`;
+    const dbDate = `${yy}${month}${day}`;
 
     const entries: TimetableEntry[] = [];
     for (let h = 0; h < 24; h++) {
       const hourStr = String(h).padStart(2, '0');
       const result = await dbFetch(`/plan/${stationResult.eva}/${dbDate}/${hourStr}`);
-      if (result && result.ok) {
-        entries.push(...parseTimetableXml(result.text));
+      if (result && result.ok && result.text) {
+        try {
+          entries.push(...parseTimetableXml(result.text));
+        } catch {
+          // skip unparseable response
+        }
       }
     }
 
