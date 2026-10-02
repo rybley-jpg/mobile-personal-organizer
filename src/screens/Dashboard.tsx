@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { TaskItem } from '@/components/TaskItem';
@@ -45,7 +45,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [overdueChecklistItems, setOverdueChecklistItems] = useState<{ label: string }[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [clockStyle, setClockStyle] = useState<ClockStyle>('analog');
-  const [clockColor, setClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-color') || '#3b82f6');
+  const [homeClockColor, setHomeClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-home-color') || '#3b82f6');
+  const [destClockColor, setDestClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-dest-color') || '#f97316');
+  const [clockColorsOpen, setClockColorsOpen] = useState(false);
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -167,9 +169,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return null;
   }, [nextTrip, allSegments]);
 
-  const handleClockColorChange = (color: string) => {
-    setClockColor(color);
-    localStorage.setItem('klarly-clock-color', color);
+  const handleHomeClockColorChange = (color: string) => {
+    setHomeClockColor(color);
+    localStorage.setItem('klarly-clock-home-color', color);
+  };
+
+  const handleDestClockColorChange = (color: string) => {
+    setDestClockColor(color);
+    localStorage.setItem('klarly-clock-dest-color', color);
   };
 
   const handleRefreshFlight = async () => {
@@ -393,35 +400,35 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={clockColor} />
+          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} />
           {destinationTimezone ? (
-            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={clockColor} />
+            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight />
           ) : (
-            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={clockColor} />
+            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={destClockColor} />
           )}
         </div>
-        {/* Clock color picker */}
-        <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-0.5">Farbe:</span>
-          {CLOCK_COLOR_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => handleClockColorChange(preset.color)}
-              className={`w-6 h-6 rounded-full transition-transform active:scale-90 ${clockColor === preset.color ? 'scale-125 ring-2 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
-              style={{ backgroundColor: preset.color, boxShadow: clockColor === preset.color ? `0 0 0 2px ${preset.color}` : undefined }}
-              aria-label={preset.id}
+        {/* Collapsible color picker */}
+        <button
+          onClick={() => setClockColorsOpen(!clockColorsOpen)}
+          className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+        >
+          <span>Farben</span>
+          {clockColorsOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+        {clockColorsOpen && (
+          <div className="mt-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3 space-y-3">
+            <ColorRow
+              label="Heimatuhr"
+              selectedColor={homeClockColor}
+              onPick={handleHomeClockColorChange}
             />
-          ))}
-          <label className="relative w-6 h-6 rounded-full overflow-hidden cursor-pointer ring-1 ring-slate-200 dark:ring-slate-700">
-            <input
-              type="color"
-              value={clockColor}
-              onChange={(e) => handleClockColorChange(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            <ColorRow
+              label="Reiseuhr"
+              selectedColor={destClockColor}
+              onPick={handleDestClockColorChange}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-[8px] text-slate-400">+</span>
-          </label>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Overdue tasks */}
@@ -642,5 +649,32 @@ function AnalogClock({ tz, now, highlight, accentColor }: { tz: string; now: num
       {/* Center dot */}
       <circle cx="50" cy="50" r="3" fill={accentColor} />
     </svg>
+  );
+}
+
+function ColorRow({ label, selectedColor, onPick }: { label: string; selectedColor: string; onPick: (c: string) => void }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 w-16 shrink-0">{label}</span>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {CLOCK_COLOR_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            onClick={() => onPick(preset.color)}
+            className={`w-5 h-5 rounded-full transition-transform active:scale-90 ${selectedColor === preset.color ? 'scale-125 ring-2 ring-offset-1 dark:ring-offset-slate-800' : ''}`}
+            style={{ backgroundColor: preset.color, boxShadow: selectedColor === preset.color ? `0 0 0 2px ${preset.color}` : undefined }}
+            aria-label={preset.id}
+          />
+        ))}
+        <label className="relative w-5 h-5 rounded-full overflow-hidden cursor-pointer ring-1 ring-slate-300 dark:ring-slate-600" style={{ backgroundColor: selectedColor }}>
+          <input
+            type="color"
+            value={selectedColor}
+            onChange={(e) => onPick(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </label>
+      </div>
+    </div>
   );
 }
