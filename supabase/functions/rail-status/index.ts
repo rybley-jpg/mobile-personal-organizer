@@ -43,32 +43,155 @@ interface StationResult {
   name: string;
 }
 
-async function findStation(query: string): Promise<StationResult | null> {
+interface StationParseResult {
+  station: StationResult | null;
+  ambiguous: StationResult[] | null;
+}
+
+function parseAllStations(xml: string): StationResult[] {
+  const stations: StationResult[] = [];
+
+  const stationRegex = /<station[^>]*>/gi;
+  let m;
+  while ((m = stationRegex.exec(xml)) !== null) {
+    const tag = m[0];
+    let eva = '';
+    let name = '';
+
+    const evaAttr = tag.match(/\seva="(\d+)"/i);
+    if (evaAttr) eva = evaAttr[1];
+    const nameAttr = tag.match(/\sname="([^"]+)"/i);
+    if (nameAttr) name = nameAttr[1];
+
+    if (!eva) {
+      const evaNumAttr = tag.match(/\sevaNumber="(\d+)"/i);
+      if (evaNumAttr) eva = evaNumAttr[1];
+    }
+    if (!name) {
+      const nameAttr2 = tag.match(/\sname="([^"]+)"/i);
+      if (nameAttr2) name = nameAttr2[1];
+    }
+
+    if (eva && name) stations.push({ eva, name });
+  }
+
+  if (stations.length > 0) return stations;
+
+  const sBlockRegex = /<station[^>]*>([\s\S]*?)<\/station>/gi;
+  let sm;
+  while ((sm = sBlockRegex.exec(xml)) !== null) {
+    const content = sm[1];
+    const evaMatch = content.match(/<eva[^>]*>(\d+)<\/eva>/i);
+    const nameMatch = content.match(/<name[^>]*>([^<]+)<\/name>/i);
+    if (evaMatch && nameMatch) {
+      stations.push({ eva: evaMatch[1], name: nameMatch[1] });
+    }
+  }
+
+  return stations;
+}
+
+function isSubordinateStation(name: string): boolean {
+  const lower = name.toLowerCase();
+  return /\(tief\)/i.test(name) ||
+    /\(sbahn\)/i.test(name) ||
+    /\(s-bahn\)/i.test(name) ||
+    /\(db\)/i.test(name) ||
+    /\(gbft\)/i.test(name) ||
+    /\(pbft\)/i.test(name) ||
+    /\(bahnsteig\)/i.test(name) ||
+    / sbahn/i.test(lower) ||
+    / s-bahn/i.test(lower);
+}
+
+function isHbf(name: string): boolean {
+  if (isSubordinateStation(name)) return false;
+  return /hbf/i.test(name);
+}
+
+async function findStation(query: string): Promise<StationParseResult> {
   const result = await dbFetch(`/station/${encodeURIComponent(query)}`);
-  if (!result || !result.ok) return null;
+  if (!result || !result.ok) {
+    return { station: null, ambiguous: null };
+  }
 
   const xml = result.text;
+  const all = parseAllStations(xml);
 
-  const attrMatch = xml.match(/<station[^>]*\seva="(\d+)"[^>]*>/i);
-  if (attrMatch) {
-    const nameAttr = xml.match(/<station[^>]*\sname="([^"]+)"/i);
-    return { eva: attrMatch[1], name: nameAttr ? nameAttr[1] : query };
+  if (all.length === 0) {
+    lastDiagnostic = { step: `station parse`, detail: `XML konnte nicht geparst werden. Erste 300 Zeichen: ${xml.slice(0, 300)}` };
+    return { station: null, ambiguous: null };
   }
 
-  const childEvaMatch = xml.match(/<eva[^>]*>(\d+)<\/eva>/i);
-  if (childEvaMatch) {
-    const childNameMatch = xml.match(/<name[^>]*>([^<]+)<\/name>/i);
-    return { eva: childEvaMatch[1], name: childNameMatch ? childNameMatch[1] : query };
+  const queryNorm = query.trim().replace(/\s+/g, ' ').toLowerCase();
+  const queryHasHbf = /hbf/i.test(query);
+  const queryHasTief = /tief/i.test(query);
+  const queryWantsSubordinate = queryHasTief || /\(s-bahn\)/i.test(query) || /\(sbahn\)/i.test(query);
+
+  const exact = all.find(s => s.name.toLowerCase() === queryNorm);
+  if (exact) return { station: exact, ambiguous: null };
+
+  if (queryHasHbf && !queryHasTief) {
+    const hbfStations = all.filter(s => isHbf(s.name));
+    if (hbfStations.length === 1) return { station: hbfStations[0], ambiguous: null };
+    if (hbfStations.length > 1) {
+      const sorted = [...hbfStations].sort((a, b) => a.name.length - b.name.length);
+      if (sorted[0].name.length < sorted[1].name.length) {
+        return { station: sorted[0], ambiguous: null };
+      }
+      return { station: null, ambiguous: hbfStations };
+    }
+
+    const cityMatch = query.match(/^(.+?)\s*hbf/i);
+    if (cityMatch) {
+      const cityQuery = cityMatch[1].trim();
+      const cityResult = await dbFetch(`/station/${encodeURIComponent(cityQuery)}`);
+      if (cityResult && cityResult.ok) {
+        const cityAll = parseAllStations(cityResult.text);
+        const cityHbf = cityAll.filter(s => isHbf(s.name));
+        if (cityHbf.length === 1) return { station: cityHbf[0], ambiguous: null };
+        if (cityHbf.length > 1) {
+          const sorted = [...cityHbf].sort((a, b) => a.name.length - b.name.length);
+          if (sorted[0].name.length < sorted[1].name.length) {
+            return { station: sorted[0], ambiguous: null };
+          }
+          return { station: null, ambiguous: cityHbf };
+        }
+      }
+    }
   }
 
-  const evaNumAttr = xml.match(/evaNumber="(\d+)"/i);
-  if (evaNumAttr) {
-    const nameAttr = xml.match(/name="([^"]+)"/i) || xml.match(/<name[^>]*>([^<]+)<\/name>/i);
-    return { eva: evaNumAttr[1], name: nameAttr ? nameAttr[1] : query };
+  if (queryHasTief) {
+    const tiefStations = all.filter(s => /tief/i.test(s.name));
+    if (tiefStations.length === 1) return { station: tiefStations[0], ambiguous: null };
+    if (tiefStations.length > 1) return { station: null, ambiguous: tiefStations };
   }
 
-  lastDiagnostic = { step: `station parse`, detail: `XML konnte nicht geparst werden. Erste 300 Zeichen: ${xml.slice(0, 300)}` };
-  return null;
+  const exactContains = all.filter(s => s.name.toLowerCase().includes(queryNorm));
+  const exactContainsFiltered = queryWantsSubordinate
+    ? exactContains
+    : exactContains.filter(s => !isSubordinateStation(s.name));
+  if (exactContainsFiltered.length === 1) return { station: exactContainsFiltered[0], ambiguous: null };
+
+  const nonSubordinate = all.filter(s => !isSubordinateStation(s.name));
+  if (nonSubordinate.length === 1) return { station: nonSubordinate[0], ambiguous: null };
+
+  if (nonSubordinate.length > 1) {
+    const sorted = [...nonSubordinate].sort((a, b) => a.name.length - b.name.length);
+    if (sorted[0].name.length < sorted[1].name.length) {
+      return { station: sorted[0], ambiguous: null };
+    }
+    return { station: null, ambiguous: nonSubordinate };
+  }
+
+  if (all.length === 1) {
+    if (queryWantsSubordinate || !isSubordinateStation(all[0].name)) {
+      return { station: all[0], ambiguous: null };
+    }
+    return { station: null, ambiguous: all };
+  }
+
+  return { station: null, ambiguous: all.slice(0, 10) };
 }
 
 interface TimetableEntry {
@@ -194,16 +317,38 @@ async function applyChanges(evaNo: string, entries: TimetableEntry[]): Promise<v
   }
 }
 
-function normalizeTrainNumber(raw: string): string {
-  return raw.replace(/\s+/g, '').toUpperCase().replace(/^[A-Z]+/, '').trim() || raw;
+interface ParsedTrainNumber {
+  type: string | null;
+  number: string | null;
+}
+
+function parseTrainNumber(raw: string): ParsedTrainNumber {
+  const trimmed = raw.trim().replace(/\s+/g, ' ');
+  const match = trimmed.match(/^([A-Za-z]+)\s+(\d+)$/);
+  if (match) {
+    return { type: match[1].toUpperCase(), number: match[2] };
+  }
+  const numOnly = trimmed.match(/^(\d+)$/);
+  if (numOnly) {
+    return { type: null, number: numOnly[1] };
+  }
+  const typeOnly = trimmed.match(/^([A-Za-z]+)$/);
+  if (typeOnly) {
+    return { type: typeOnly[1].toUpperCase(), number: null };
+  }
+  return { type: null, number: null };
 }
 
 function matchTrainEntry(entries: TimetableEntry[], trainNumber: string): TimetableEntry | null {
-  const target = normalizeTrainNumber(trainNumber);
+  const parsed = parseTrainNumber(trainNumber);
+  if (!parsed.type || !parsed.number) return null;
+
   for (const e of entries) {
-    const normalized = normalizeTrainNumber(e.trainNumber);
-    if (normalized === target) return e;
-    if (e.trainNumber && e.trainNumber.toUpperCase() === trainNumber.toUpperCase()) return e;
+    if (e.trainType && e.trainNumber &&
+        e.trainType.toUpperCase() === parsed.type &&
+        e.trainNumber === parsed.number) {
+      return e;
+    }
   }
   return null;
 }
@@ -234,8 +379,20 @@ Deno.serve(async (req: Request) => {
     }
 
     let stationResult: StationResult | null = null;
+    let ambiguousStations: StationResult[] | null = null;
     if (station) {
-      stationResult = await findStation(station);
+      const parseResult = await findStation(station);
+      stationResult = parseResult.station;
+      ambiguousStations = parseResult.ambiguous;
+    }
+
+    if (!stationResult && ambiguousStations && ambiguousStations.length > 0) {
+      return new Response(JSON.stringify({
+        error: "station_ambiguous",
+        message: `Bahnhof "${station}" ist nicht eindeutig. Mehrere Treffer gefunden.`,
+        candidates: ambiguousStations.map(s => s.name),
+        diagnostic: debug ? lastDiagnostic : undefined,
+      }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (!stationResult) {
@@ -276,6 +433,15 @@ Deno.serve(async (req: Request) => {
     }
 
     await applyChanges(stationResult.eva, entries);
+
+    const parsedTrain = parseTrainNumber(trainNumber);
+    if (!parsedTrain.type || !parsedTrain.number) {
+      return new Response(JSON.stringify({
+        error: "train_type_required",
+        message: `Zugnummer "${trainNumber}" muss Zugtyp und Nummer enthalten, z. B. "ICE 628" oder "RE 3822".`,
+        station: stationResult.name,
+      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const match = matchTrainEntry(entries, trainNumber);
     if (!match) {
