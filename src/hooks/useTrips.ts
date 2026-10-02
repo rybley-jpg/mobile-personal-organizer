@@ -68,7 +68,7 @@ export function useTrips() {
     setSegments((prev) => prev.filter((s) => s.trip_id !== id));
   }, []);
 
-  const addSegment = useCallback(async (input: TripSegmentInput) => {
+  const addSegment = useCallback(async (input: Partial<TripSegmentInput> & { trip_id: string; segment_type: string; order_index: number }) => {
     const { data, error: insertError } = await supabase.from('trip_segments').insert(input).select().maybeSingle();
     if (insertError) throw insertError;
     if (data) setSegments((prev) => [...prev, data]);

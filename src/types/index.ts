@@ -4,8 +4,28 @@ export type RepeatRule = 'taeglich' | 'woechentlich' | 'monatlich' | 'jaehrlich'
 export type ReminderOffset = 'none' | 'at_time' | '15m' | '1h' | '2h' | '1d' | '3d' | '7d';
 export type SegmentType = 'flug' | 'hotel' | 'mietwagen' | 'bahn' | 'sonstiges';
 export type FlightStatus = 'scheduled' | 'delayed' | 'boarding' | 'departed' | 'arrived' | 'cancelled' | 'diverted';
+export type TrainStatus = 'on_time' | 'delayed' | 'cancelled' | 'unknown';
 export type TravelClass = 'Economy' | 'Premium Economy' | 'Business' | 'First';
 export type CheckInReminderOffset = '48h' | '24h' | '12h' | '6h' | 'custom' | 'none';
+
+export type TransportStatus = 'on_time' | 'delayed' | 'cancelled' | 'boarding' | 'departed' | 'arrived' | 'unknown';
+
+export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
+  on_time: 'Pünktlich',
+  delayed: 'Verspätet',
+  cancelled: 'Ausgefallen',
+  unknown: 'Keine Live-Daten',
+};
+
+export const TRANSPORT_STATUS_LABELS: Record<TransportStatus, string> = {
+  on_time: 'Planmäßig',
+  delayed: 'Verspätet',
+  cancelled: 'Ausgefallen',
+  boarding: 'Boarding',
+  departed: 'Unterwegs',
+  arrived: 'Angekommen',
+  unknown: 'Keine Live-Daten',
+};
 
 export interface Category {
   id: string;
@@ -89,6 +109,13 @@ export interface TripSegment {
   wagon: string | null;
   seat_number: string | null;
   platform: string | null;
+  train_operator: string | null;
+  last_train_status: TrainStatus | null;
+  last_known_platform: string | null;
+  previous_platform: string | null;
+  platform_changed: boolean;
+  delay_minutes_train: number | null;
+  last_train_update: string | null;
 }
 
 export interface Contact {

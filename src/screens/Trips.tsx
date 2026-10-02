@@ -1,21 +1,25 @@
 import { useMemo, useState } from 'react';
-import { Plus, Plane, Hotel, Car, Package, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet } from 'lucide-react';
+import { Plus, Plane, Hotel, Car, Package, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Trip, TripSegment, SegmentType } from '@/types';
 import { SEGMENT_TYPE_LABELS } from '@/types';
 import { Sheet } from '@/components/ui/Sheet';
 import { FlightDetail } from '@/components/FlightDetail';
 import { FlightStatusBadge } from '@/components/FlightStatusBadge';
+import { TrainDetail } from '@/components/TrainDetail';
+import { TrainStatusBadge } from '@/components/TrainStatusBadge';
 import { SegmentEditor } from '@/components/SegmentEditor';
 import { TravelChecklist } from '@/components/TravelChecklist';
 import { WalletPanel } from '@/components/WalletPanel';
-import { formatRelativeDate, formatTime, formatDateShort, todayISO } from '@/lib/dateUtils';
-import { generateSuggestedFlightReminders } from '@/lib/tripReminders';
+import { formatRelativeDate, formatTime, formatDateShort, todayISO, combineDateTime } from '@/lib/dateUtils';
+import { generateSuggestedFlightReminders, generateSuggestedTrainReminders } from '@/lib/tripReminders';
+import { computeTripOverallStatus, computeConnections, getSegmentTransportStatus, formatDuration } from '@/lib/travelStatus';
 
 const SEGMENT_ICON: Record<SegmentType, typeof Plane> = {
   flug: Plane,
   hotel: Hotel,
   mietwagen: Car,
+  bahn: Train,
   sonstiges: Package,
 };
 
@@ -102,15 +106,39 @@ export function Trips() {
 
 function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
   const { tripsApi } = useOrganizer();
-  const tripSegs = tripsApi.segments.filter((s: TripSegment) => s.trip_id === trip.id).sort((a, b) => a.order_index - b.order_index);
+  const tripSegs = tripsApi.segments.filter((s: TripSegment) => s.trip_id === trip.id);
   const [suggestSheet, setSuggestSheet] = useState(false);
   const [flightDetailSeg, setFlightDetailSeg] = useState<TripSegment | null>(null);
+  const [trainDetailSeg, setTrainDetailSeg] = useState<TripSegment | null>(null);
   const [segEditorOpen, setSegEditorOpen] = useState(false);
   const [editingSeg, setEditingSeg] = useState<TripSegment | null>(null);
 
+  // Chronological sorting by departure date+time
+  const sortedSegs = useMemo(() => {
+    return [...tripSegs].sort((a, b) => {
+      const aDate = combineDateTime(a.departure_date, a.departure_time);
+      const bDate = combineDateTime(b.departure_date, b.departure_time);
+      if (!aDate && !bDate) return a.order_index - b.order_index;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return aDate.getTime() - bDate.getTime();
+    });
+  }, [tripSegs]);
+
+  const overallStatus = useMemo(() => computeTripOverallStatus(sortedSegs), [sortedSegs]);
+  const connections = useMemo(() => computeConnections(sortedSegs), [sortedSegs]);
+
+  const statusConfig: Record<typeof overallStatus, { icon: typeof CheckCircle2; bg: string; text: string; label: string }> = {
+    on_time: { icon: CheckCircle2, bg: 'bg-green-100 dark:bg-green-950/40', text: 'text-green-700 dark:text-green-300', label: 'Reise planmäßig' },
+    with_changes: { icon: AlertTriangle, bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', label: 'Reise mit Änderungen' },
+    cancelled: { icon: AlertTriangle, bg: 'bg-red-100 dark:bg-red-950/40', text: 'text-red-700 dark:text-red-300', label: 'Reiseabschnitt ausgefallen' },
+    partial_unknown: { icon: Clock, bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', label: 'Live-Daten teilweise nicht verfügbar' },
+  };
+  const StatusIcon = statusConfig[overallStatus].icon;
+
   return (
     <>
-    <Sheet open={!!trip && !flightDetailSeg && !segEditorOpen} onClose={onClose} title={trip.name}>
+    <Sheet open={!!trip && !flightDetailSeg && !trainDetailSeg && !segEditorOpen} onClose={onClose} title={trip.name}>
       <div className="space-y-5">
         {trip.destination && (
           <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
@@ -118,9 +146,43 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
           </div>
         )}
 
+        {/* Overall trip status banner */}
+        {sortedSegs.length > 0 && (
+          <div className={`flex items-center gap-2.5 rounded-2xl ${statusConfig[overallStatus].bg} p-3.5`}>
+            <StatusIcon size={18} className={statusConfig[overallStatus].text} />
+            <span className={`text-sm font-medium ${statusConfig[overallStatus].text}`}>{statusConfig[overallStatus].label}</span>
+          </div>
+        )}
+
         {trip.notes && (
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-sm text-slate-600 dark:text-slate-300">
             {trip.notes}
+          </div>
+        )}
+
+        {/* Connection monitoring */}
+        {connections.filter((c) => c.warningLevel !== 'none').length > 0 && (
+          <div className="space-y-2">
+            {connections.filter((c) => c.warningLevel !== 'none').map((c, idx) => (
+              <div key={idx} className={`rounded-2xl p-3.5 flex items-start gap-2.5 ${
+                c.warningLevel === 'critical'
+                  ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40'
+                  : 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40'
+              }`}>
+                <AlertTriangle size={16} className={c.warningLevel === 'critical' ? 'text-red-600 dark:text-red-400 shrink-0 mt-0.5' : 'text-amber-600 dark:text-amber-400 shrink-0 mt-0.5'} />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium ${c.warningLevel === 'critical' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                    Anschlussüberwachung
+                  </p>
+                  <p className={`text-xs mt-0.5 ${c.warningLevel === 'critical' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {c.message}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {c.fromSegment.from_location} → {c.fromSegment.to_location} → {c.toSegment.to_location}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -135,7 +197,7 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
               <Plus size={14} /> Etappe
             </button>
           </div>
-          {tripSegs.length === 0 ? (
+          {sortedSegs.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-6 text-center">
               <p className="text-sm text-slate-400 dark:text-slate-500 mb-2">Noch keine Etappen.</p>
               <button
@@ -149,23 +211,27 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
           <div className="relative pl-6">
             <div className="absolute left-2 top-1 bottom-1 w-0.5 bg-slate-200 dark:bg-slate-700" />
             <div className="space-y-4">
-              {tripSegs.map((seg, idx) => {
+              {sortedSegs.map((seg, idx) => {
                 const Icon = SEGMENT_ICON[seg.segment_type];
+                const isTransport = seg.segment_type === 'flug' || seg.segment_type === 'bahn';
                 return (
                   <div key={seg.id} className="relative">
                     <span className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-primary-600 text-white flex items-center justify-center ring-4 ring-white dark:ring-slate-900">
                       <Icon size={11} />
                     </span>
                     <div
-                      className={`relative rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 p-3.5 ${seg.segment_type === 'flug' ? 'hover:border-primary-300 dark:hover:border-primary-700 active:scale-[0.98] transition-all' : ''}`}
+                      className={`relative rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 p-3.5 ${isTransport ? 'hover:border-primary-300 dark:hover:border-primary-700 active:scale-[0.98] transition-all' : ''}`}
                     >
                       <button
-                        onClick={() => seg.segment_type === 'flug' ? setFlightDetailSeg(seg) : undefined}
-                        className={`w-full text-left ${seg.segment_type === 'flug' ? 'cursor-pointer' : 'cursor-default'}`}
+                        onClick={() => {
+                          if (seg.segment_type === 'flug') setFlightDetailSeg(seg);
+                          else if (seg.segment_type === 'bahn') setTrainDetailSeg(seg);
+                        }}
+                        className={`w-full text-left ${isTransport ? 'cursor-pointer' : 'cursor-default'}`}
                       >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">{SEGMENT_TYPE_LABELS[seg.segment_type]}</span>
-                        {seg.order_index > 0 && <span className="text-[10px] text-slate-400">Etappe {idx + 1}</span>}
+                        {idx > 0 && <span className="text-[10px] text-slate-400">{idx + 1}.</span>}
                       </div>
                       {seg.title && <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-1">{seg.title}</p>}
 
@@ -186,6 +252,7 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
                         )}
                       </div>
 
+                      {/* Flight details */}
                       {(seg.airline || seg.flight_number || seg.booking_number || seg.terminal || seg.gate || seg.seat || seg.baggage_info) && (
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 text-xs">
                           {seg.airline && <Detail label="Fluggesellschaft" value={seg.airline} />}
@@ -197,6 +264,19 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
                           {seg.baggage_info && <Detail label="Gepäck" value={seg.baggage_info} />}
                         </div>
                       )}
+
+                      {/* Train details */}
+                      {seg.segment_type === 'bahn' && (seg.train_number || seg.train_operator || seg.platform || seg.wagon || seg.seat_number) && (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 text-xs">
+                          {seg.train_number && <Detail label="Zugnummer" value={seg.train_number} />}
+                          {seg.train_operator && <Detail label="Unternehmen" value={seg.train_operator} />}
+                          {seg.platform && <Detail label="Gleis" value={seg.platform} />}
+                          {seg.wagon && <Detail label="Wagen" value={seg.wagon} />}
+                          {seg.seat_number && <Detail label="Sitzplatz" value={seg.seat_number} />}
+                          {seg.booking_number && <Detail label="Buchung" value={seg.booking_number} mono />}
+                        </div>
+                      )}
+
                       {seg.segment_type === 'flug' && seg.last_flight_status && (
                         <div className="mt-2">
                           <FlightStatusBadge
@@ -207,10 +287,28 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
                           />
                         </div>
                       )}
+                      {seg.segment_type === 'flug' && !seg.last_flight_status && (
+                        <div className="mt-2">
+                          <FlightStatusBadge status={null} compact />
+                        </div>
+                      )}
 
-                      {seg.segment_type === 'flug' && (
+                      {seg.segment_type === 'bahn' && (
+                        <div className="mt-2">
+                          <TrainStatusBadge
+                            status={seg.last_train_status}
+                            delayMinutes={seg.delay_minutes_train}
+                            platformChanged={seg.platform_changed}
+                            compact
+                          />
+                        </div>
+                      )}
+
+                      {isTransport && (
                         <div className="mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60">
-                          <span className="text-xs font-medium text-primary-600 dark:text-primary-400">Tippe für Flugdetails & Live-Status →</span>
+                          <span className="text-xs font-medium text-primary-600 dark:text-primary-400">
+                            {seg.segment_type === 'flug' ? 'Tippe für Flugdetails & Live-Status →' : 'Tippe für Zugdetails & Live-Status →'}
+                          </span>
                         </div>
                       )}
                       </button>
@@ -336,6 +434,15 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
         tripName={trip.name}
       />
     )}
+
+    {trainDetailSeg && (
+      <TrainDetail
+        segment={trainDetailSeg}
+        open={!!trainDetailSeg}
+        onClose={() => setTrainDetailSeg(null)}
+        tripName={trip.name}
+      />
+    )}
     </>
   );
 }
@@ -356,7 +463,8 @@ function SuggestedRemindersSheet({ open, onClose, trip, segments }: { open: bool
 
   const suggestions = useMemo(() => {
     const flightSegs = segments.filter((s) => s.segment_type === 'flug');
-    const all = flightSegs.flatMap((s) => generateSuggestedFlightReminders(s));
+    const trainSegs = segments.filter((s) => s.segment_type === 'bahn');
+    const all = [...flightSegs.flatMap((s) => generateSuggestedFlightReminders(s)), ...trainSegs.flatMap((s) => generateSuggestedTrainReminders(s))];
     // de-duplicate by title
     const seen = new Set<string>();
     return all.filter((s) => {

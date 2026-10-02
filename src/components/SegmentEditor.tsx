@@ -38,6 +38,11 @@ type SegmentDraft = {
   price_amount: string;
   price_currency: string;
   order_index: number;
+  train_number: string;
+  train_operator: string;
+  platform: string;
+  wagon: string;
+  seat_number: string;
 };
 
 const EMPTY_DRAFT: SegmentDraft = {
@@ -65,6 +70,11 @@ const EMPTY_DRAFT: SegmentDraft = {
   price_amount: '',
   price_currency: 'EUR',
   order_index: 0,
+  train_number: '',
+  train_operator: '',
+  platform: '',
+  wagon: '',
+  seat_number: '',
 };
 
 export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorProps) {
@@ -102,6 +112,11 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
         price_amount: segment.price_amount != null ? String(segment.price_amount) : '',
         price_currency: segment.price_currency ?? 'EUR',
         order_index: segment.order_index,
+        train_number: segment.train_number ?? '',
+        train_operator: segment.train_operator ?? '',
+        platform: segment.platform ?? '',
+        wagon: segment.wagon ?? '',
+        seat_number: segment.seat_number ?? '',
       });
     } else {
       const existingSegs = tripsApi.segments.filter((s) => s.trip_id === tripId);
@@ -147,6 +162,11 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
         price_amount: draft.price_amount ? parseFloat(draft.price_amount) : null,
         price_currency: draft.price_currency || 'EUR',
         order_index: draft.order_index,
+        train_number: draft.train_number.trim() || null,
+        train_operator: draft.train_operator.trim() || null,
+        platform: draft.platform.trim() || null,
+        wagon: draft.wagon.trim() || null,
+        seat_number: draft.seat_number.trim() || null,
       };
       if (segment) {
         await tripsApi.updateSegment(segment.id, payload);
@@ -175,6 +195,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   };
 
   const isFlight = draft.segment_type === 'flug';
+  const isTrain = draft.segment_type === 'bahn';
 
   return (
     <Sheet
@@ -455,6 +476,74 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
                 />
               </Field>
             )}
+          </>
+        )}
+
+        {/* Train-specific fields */}
+        {isTrain && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Zugnummer">
+                <input
+                  type="text"
+                  value={draft.train_number}
+                  onChange={(e) => update('train_number', e.target.value)}
+                  placeholder="z. B. ICE 628"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500 font-mono"
+                />
+              </Field>
+              <Field label="Verkehrsunternehmen">
+                <input
+                  type="text"
+                  value={draft.train_operator}
+                  onChange={(e) => update('train_operator', e.target.value)}
+                  placeholder="z. B. DB Fernverkehr"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Gleis">
+                <input
+                  type="text"
+                  value={draft.platform}
+                  onChange={(e) => update('platform', e.target.value)}
+                  placeholder="z. B. 7"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                />
+              </Field>
+              <Field label="Buchungsnummer">
+                <input
+                  type="text"
+                  value={draft.booking_number}
+                  onChange={(e) => update('booking_number', e.target.value)}
+                  placeholder="z. B. QKL2XY"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500 font-mono"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Wagen">
+                <input
+                  type="text"
+                  value={draft.wagon}
+                  onChange={(e) => update('wagon', e.target.value)}
+                  placeholder="z. B. 12"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                />
+              </Field>
+              <Field label="Sitzplatz">
+                <input
+                  type="text"
+                  value={draft.seat_number}
+                  onChange={(e) => update('seat_number', e.target.value)}
+                  placeholder="z. B. 42"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                />
+              </Field>
+            </div>
           </>
         )}
 

@@ -370,6 +370,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             {nextTrainSegment.departure_date && <span className="flex items-center gap-1"><Calendar size={11} /> {formatRelativeDate(nextTrainSegment.departure_date)}</span>}
             {nextTrainSegment.departure_time && <span className="flex items-center gap-1">{formatTime(nextTrainSegment.departure_time)}</span>}
           </div>
+          {nextTrainSegment.last_train_status && nextTrainSegment.last_train_status !== 'unknown' && (
+            <div className="mt-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-full text-[10px] px-2 py-0.5 font-medium ${
+                nextTrainSegment.last_train_status === 'on_time' ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300'
+                : nextTrainSegment.last_train_status === 'delayed' ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300'
+              }`}>
+                {nextTrainSegment.last_train_status === 'on_time' ? 'Pünktlich' : nextTrainSegment.last_train_status === 'delayed' ? `+${nextTrainSegment.delay_minutes_train ?? 0} Min` : 'Ausgefallen'}
+              </span>
+            </div>
+          )}
+          {!nextTrainSegment.last_train_status && (
+            <p className="text-[10px] text-slate-400 mt-2">Keine Live-Daten verfügbar</p>
+          )}
         </div>
       )}
 

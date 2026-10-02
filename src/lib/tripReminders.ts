@@ -48,3 +48,26 @@ export function generateSuggestedFlightReminders(segment: TripSegment): Suggeste
     priority: r.priority,
   }));
 }
+
+export function generateSuggestedTrainReminders(segment: TripSegment): SuggestedReminder[] {
+  const departure = departureDateTime(segment);
+  if (!departure) return [];
+
+  const route = [segment.from_location, segment.to_location].filter(Boolean).join(' → ');
+  const label = route ? ` (${route})` : '';
+  const trainLabel = segment.train_number ? ` ${segment.train_number}` : '';
+
+  const reminders: { title: string; at: Date; priority: 'niedrig' | 'normal' | 'hoch' }[] = [
+    { title: `Ticket für${trainLabel} bereithalten${label}`, at: minusHours(departure, 24), priority: 'normal' },
+    { title: `Gepäck vorbereiten${label}`, at: minusHours(departure, 24), priority: 'normal' },
+    { title: `Rechtzeitig zum Bahnhof${label}`, at: minusHours(departure, 1), priority: 'hoch' },
+    { title: `Gleis und Wagen prüfen${trainLabel}${label}`, at: minusHours(departure, 1), priority: 'normal' },
+  ];
+
+  return reminders.map((r) => ({
+    title: r.title,
+    due_date: toISODate(r.at),
+    due_time: `${String(r.at.getHours()).padStart(2, '0')}:${String(r.at.getMinutes()).padStart(2, '0')}`,
+    priority: r.priority,
+  }));
+}
