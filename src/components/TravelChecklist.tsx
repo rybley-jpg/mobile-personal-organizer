@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Check, Plus, X, ListChecks } from 'lucide-react';
+import { Check, Plus, X, ListChecks, Calendar, AlertCircle } from 'lucide-react';
 import { useTravelChecklist } from '@/hooks/useTravelChecklist';
+import { todayISO, formatDateShort } from '@/lib/dateUtils';
 
 export function TravelChecklist({ tripId }: { tripId: string }) {
-  const { items, addItem, toggleItem, deleteItem, seedDefaultItems, loading } = useTravelChecklist(tripId);
+  const { items, addItem, toggleItem, deleteItem, updateDeadline, seedDefaultItems, loading } = useTravelChecklist(tripId);
   const [newItem, setNewItem] = useState('');
 
   const checkedCount = items.filter((i) => i.checked).length;
   const totalCount = items.length;
   const progress = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0;
+
+  const today = todayISO();
 
   const handleAdd = () => {
     if (!newItem.trim()) return;
@@ -84,37 +87,65 @@ export function TravelChecklist({ tripId }: { tripId: string }) {
       </div>
 
       <div className="space-y-1.5">
-        {items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2 group">
-            <button
-              onClick={() => toggleItem(item.id)}
-              className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                item.checked
-                  ? 'bg-primary-600 border-primary-600 text-white'
-                  : 'border-slate-300 dark:border-slate-600'
-              }`}
-            >
-              {item.checked && <Check size={12} strokeWidth={3} />}
-            </button>
-            <span
-              className={`flex-1 text-sm ${
-                item.checked
-                  ? 'line-through text-slate-400 dark:text-slate-600'
-                  : 'text-slate-700 dark:text-slate-200'
-              }`}
-            >
-              {item.label}
-            </span>
-            {item.is_custom && (
+        {items.map((item) => {
+          const isOverdue = !item.checked && item.deadline && item.deadline < today;
+          return (
+            <div key={item.id} className={`flex items-center gap-2 group rounded-lg px-1.5 py-1 transition-colors ${isOverdue ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
               <button
-                onClick={() => deleteItem(item.id)}
-                className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                onClick={() => toggleItem(item.id)}
+                className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                  item.checked
+                    ? 'bg-primary-600 border-primary-600 text-white'
+                    : isOverdue
+                      ? 'border-red-400 dark:border-red-500'
+                      : 'border-slate-300 dark:border-slate-600'
+                }`}
               >
-                <X size={14} />
+                {item.checked && <Check size={12} strokeWidth={3} />}
               </button>
-            )}
-          </div>
-        ))}
+              <div className="flex-1 min-w-0">
+                <span
+                  className={`text-sm block truncate ${
+                    item.checked
+                      ? 'line-through text-slate-400 dark:text-slate-600'
+                      : isOverdue
+                        ? 'text-red-600 dark:text-red-400 font-medium'
+                        : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </div>
+              {/* Deadline display / picker */}
+              <label className="shrink-0 cursor-pointer relative">
+                <input
+                  type="date"
+                  value={item.deadline ?? ''}
+                  onChange={(e) => updateDeadline(item.id, e.target.value || null)}
+                  className="sr-only"
+                />
+                <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors ${
+                  isOverdue
+                    ? 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/40 font-semibold'
+                    : item.deadline
+                      ? 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
+                      : 'text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 opacity-0 group-hover:opacity-100'
+                }`}>
+                  {isOverdue ? <AlertCircle size={10} /> : <Calendar size={10} />}
+                  {item.deadline ? formatDateShort(item.deadline) : 'Frist'}
+                </span>
+              </label>
+              {item.is_custom && (
+                <button
+                  onClick={() => deleteItem(item.id)}
+                  className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-2 mt-3">

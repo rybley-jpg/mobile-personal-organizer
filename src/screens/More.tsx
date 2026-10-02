@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Moon, Sun, Plus, Tag, Trash2, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator } from 'lucide-react';
+import { Moon, Sun, Plus, Tag, Trash2, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
@@ -11,7 +11,7 @@ const ICON_OPTIONS = ['tag', 'home', 'briefcase', 'heart', 'plane', 'phone', 'wa
 const COLOR_OPTIONS = ['#64748b', '#2563eb', '#ec4899', '#0ea5e9', '#f59e0b', '#10b981', '#06b6d4', '#f97316', '#ef4444', '#8b5cf6'];
 
 export function More() {
-  const { theme, toggleTheme, accentId, setAccentId, accentPresets } = useTheme();
+  const { theme, toggleTheme, accentId, setAccentId, accentPresets, bgEnabled, setBgEnabled } = useTheme();
   const { categoriesApi } = useOrganizer();
   const { user, signOut } = useAuth();
   const [addCatOpen, setAddCatOpen] = useState(false);
@@ -91,6 +91,23 @@ export function More() {
               Die Farbe wird auf alle Schaltflächen, Hervorhebungen und Akzente angewendet.
             </p>
           </div>
+
+          {/* Background watermark toggle */}
+          <button
+            onClick={() => setBgEnabled(!bgEnabled)}
+            className="mt-3 w-full flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4"
+          >
+            <span className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+              <MapPin size={18} />
+            </span>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium text-slate-900 dark:text-white">Reiseland im Hintergrund</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Zeigt das Reiseziel als Wasserzeichen an</p>
+            </div>
+            <span className={`w-11 h-6 rounded-full transition-colors flex items-center ${bgEnabled ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+              <span className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${bgEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </span>
+          </button>
         </section>
 
         {/* Categories */}

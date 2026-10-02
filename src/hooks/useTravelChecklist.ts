@@ -85,6 +85,19 @@ export function useTravelChecklist(tripId: string | null) {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }, []);
 
+  const updateDeadline = useCallback(
+    async (id: string, deadline: string | null) => {
+      const { error } = await supabase
+        .from('travel_checklists')
+        .update({ deadline })
+        .eq('id', id);
+
+      if (error) throw error;
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, deadline } : i)));
+    },
+    [],
+  );
+
   const seedDefaultItems = useCallback(async () => {
     if (!tripId) return;
     const { count, error: countError } = await supabase
@@ -113,5 +126,5 @@ export function useTravelChecklist(tripId: string | null) {
     if (data) setItems(data);
   }, [tripId]);
 
-  return { items, loading, addItem, toggleItem, deleteItem, seedDefaultItems, refetch: fetchItems };
+  return { items, loading, addItem, toggleItem, deleteItem, updateDeadline, seedDefaultItems, refetch: fetchItems };
 }

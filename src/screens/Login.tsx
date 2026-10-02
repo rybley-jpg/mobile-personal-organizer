@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, CheckSquare, UserPlus, LogIn, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, CheckSquare, UserPlus, LogIn, AlertCircle, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export function Login() {
@@ -7,6 +7,7 @@ export function Login() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,7 @@ export function Login() {
       if (mode === 'signin') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password);
+        await signUp(email.trim(), password, name.trim() || undefined);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Ein Fehler ist aufgetreten.';
@@ -76,6 +77,23 @@ export function Login() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Name</label>
+                <div className="relative">
+                  <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                    placeholder="Dein Name"
+                    className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">E-Mail</label>
               <div className="relative">

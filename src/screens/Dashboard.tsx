@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, MapPin, Globe, Clock } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { TaskItem } from '@/components/TaskItem';
@@ -16,6 +16,8 @@ interface DashboardProps {
   onNavigate: (tab: string) => void;
 }
 
+type ClockStyle = 'analog' | 'digital';
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { tasksApi, tripsApi } = useOrganizer();
   const { user } = useAuth();
@@ -25,8 +27,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [flightDetailSegment, setFlightDetailSegment] = useState<typeof allSegments[number] | null>(null);
   const [refreshingFlight, setRefreshingFlight] = useState(false);
-  const [openChecklistItems, setOpenChecklistItems] = useState<string[]>([]);
+  const [overdueChecklistItems, setOverdueChecklistItems] = useState<{ label: string }[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [clockStyle, setClockStyle] = useState<ClockStyle>('analog');
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -52,7 +55,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return tasks
       .filter((t) => t.status === 'offen' && t.reminder_offset !== 'none' && t.due_date)
       .map((t) => ({ task: t, remindAt: computeReminderAt(t) }))
-      .filter((r) => r.remindAt && r.remindAt.getTime() > Date.now())
+      .filter((r) => r.remindAt && r.remindAt!.getTime() > Date.now())
       .sort((a, b) => a.remindAt!.getTime() - b.remindAt!.getTime())
       .slice(0, 3);
   }, [tasks]);
@@ -63,6 +66,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       .filter((s) => s.segment_type === 'flug' && s.departure_date && s.departure_date >= today)
       .sort((a, b) => (a.departure_date ?? '').localeCompare(b.departure_date ?? ''));
     return flights[0] ?? null;
+  }, [allSegments]);
+
+  const nextTrainSegment = useMemo(() => {
+    const today = todayISO();
+    const trains = allSegments
+      .filter((s) => s.segment_type === 'bahn' && s.departure_date && s.departure_date >= today)
+      .sort((a, b) => (a.departure_date ?? '').localeCompare(b.departure_date ?? ''));
+    return trains[0] ?? null;
   }, [allSegments]);
 
   const nextTrip = useMemo(() => {
@@ -91,15 +102,21 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, [nextTrip]);
 
   useEffect(() => {
-    if (!nextTrip) { setOpenChecklistItems([]); return; }
+    if (!nextTrip) { setOverdueChecklistItems([]); return; }
     supabase
       .from('travel_checklists')
-      .select('label,checked')
+      .select('label,checked,deadline')
       .eq('trip_id', nextTrip.trip.id)
       .eq('checked', false)
       .order('sort_index', { ascending: true })
       .then(({ data }) => {
-        if (data) setOpenChecklistItems(data.map((d) => d.label));
+        if (!data) { setOverdueChecklistItems([]); return; }
+        const today = todayISO();
+        setOverdueChecklistItems(
+          data
+            .filter((d) => d.deadline && d.deadline < today)
+            .map((d) => ({ label: d.label }))
+        );
       });
   }, [nextTrip]);
 
@@ -117,25 +134,21 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return () => clearInterval(id);
   }, []);
 
-  const tripTimezones = useMemo(() => {
-    if (!nextTrip) return [];
-    const tzSet = new Map<string, { tz: string; label: string }>();
+  const homeTimezone = 'Europe/Berlin';
+  const destinationTimezone = useMemo(() => {
+    if (!nextTrip) return null;
     const tripSegs = allSegments.filter((s) => s.trip_id === nextTrip.trip.id);
     for (const seg of tripSegs) {
       if (seg.to_airport_code) {
         const tz = getAirportTimezone(seg.to_airport_code);
-        if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: seg.to_airport_code });
-      }
-      if (seg.from_airport_code) {
-        const tz = getAirportTimezone(seg.from_airport_code);
-        if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: seg.from_airport_code });
+        if (tz) return { tz: tz.tz, label: nextTrip.trip.destination ?? seg.to_airport_code };
       }
     }
     if (nextTrip.trip.destination) {
       const tz = getCityTimezone(nextTrip.trip.destination);
-      if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: nextTrip.trip.destination });
+      if (tz) return { tz: tz.tz, label: nextTrip.trip.destination };
     }
-    return Array.from(tzSet.values()).slice(0, 3);
+    return null;
   }, [nextTrip, allSegments]);
 
   const handleRefreshFlight = async () => {
@@ -151,6 +164,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   };
 
   const canRefreshFlight = nextFlight && shouldRefreshFlightStatus(nextFlight);
+  const hasOverdueItems = overdueChecklistItems.length > 0;
 
   return (
     <div className="px-4 pt-6 pb-[calc(112px+env(safe-area-inset-bottom))] space-y-6">
@@ -163,67 +177,68 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </div>
       </header>
 
-      {/* Trip countdown summary */}
+      {/* Trip countdown — main hero card */}
       {nextTrip && (
-        <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-sky-600 p-5 text-white shadow-lg shadow-primary-600/20">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <div className="flex items-center gap-1.5 text-sm text-white/80">
-                <MapPin size={14} />
-                <span>{nextTrip.trip.destination ?? nextTrip.trip.name}</span>
-              </div>
-              {daysUntilTrip !== null ? (
-                <>
-                  <p className="text-3xl font-bold mt-1">
-                    {daysUntilTrip === 0 ? 'Heute geht es los!' : daysUntilTrip === 1 ? 'Noch 1 Tag' : `Noch ${daysUntilTrip} Tage`}
-                  </p>
-                  <p className="text-sm text-white/80 mt-0.5">bis zu deiner Reise nach {nextTrip.trip.destination ?? nextTrip.trip.name}</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold mt-1">{nextTrip.trip.name}</p>
-                  {nextTrip.trip.destination && <p className="text-sm text-white/80 mt-0.5">Reise nach {nextTrip.trip.destination}</p>}
-                  <p className="text-xs text-white/70 mt-1">Noch kein Abreisedatum festgelegt</p>
-                </>
-              )}
+        <div className="rounded-3xl bg-gradient-to-br from-primary-600 via-sky-600 to-primary-700 p-6 text-white shadow-xl shadow-primary-600/20 overflow-hidden relative">
+          <div className="relative z-10">
+            <div className="flex items-center gap-1.5 text-sm text-white/80 mb-2">
+              <MapPin size={14} />
+              <span>{nextTrip.trip.destination ?? nextTrip.trip.name}</span>
             </div>
-            <button
-              onClick={() => onNavigate('reisen')}
-              className="shrink-0 rounded-xl bg-white/20 hover:bg-white/30 px-3 py-2 text-xs font-medium transition-colors"
-            >
-              Reise ansehen
-            </button>
+            {daysUntilTrip !== null ? (
+              <div>
+                <p className="text-sm text-white/85">
+                  {userName ? `${userName}, deine ` : 'Deine '}Reise nach {nextTrip.trip.destination ?? nextTrip.trip.name}
+                </p>
+                <p className="text-4xl font-bold mt-1">
+                  {daysUntilTrip === 0 ? 'startet heute!' : daysUntilTrip === 1 ? 'startet in 1 Tag' : `startet in ${daysUntilTrip} Tagen`}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-2xl font-bold mt-1">{nextTrip.trip.name}</p>
+                {nextTrip.trip.destination && <p className="text-sm text-white/85 mt-0.5">Reise nach {nextTrip.trip.destination}</p>}
+                <p className="text-xs text-white/70 mt-1">Noch kein Abreisedatum festgelegt</p>
+              </div>
+            )}
           </div>
-          {(openChecklistItems.length > 0 || openTripTasks.length > 0 || (openTripTasks.length === 0 && allOpenTasks.length > 0)) && (
-            <div className="space-y-1.5 pt-3 border-t border-white/20">
-              <p className="text-xs font-medium text-white/90">Du musst noch:</p>
-              {openChecklistItems.slice(0, 4).map((label) => (
-                <div key={label} className="flex items-center gap-2 text-sm text-white/85">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                  <span className="truncate">{label} besorgen</span>
+
+          {/* Open items with overdue highlight */}
+          {(hasOverdueItems || openTripTasks.length > 0 || allOpenTasks.length > 0) && (
+            <div className="mt-4 pt-4 border-t border-white/20 relative z-10 space-y-1.5">
+              {hasOverdueItems && (
+                <p className="text-xs font-bold text-red-300 flex items-center gap-1.5">
+                  <AlertCircle size={13} /> Überfällig:
+                </p>
+              )}
+              {overdueChecklistItems.map((item) => (
+                <div key={item.label} className="flex items-center gap-2 text-sm text-red-300 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <span className="truncate">{item.label}</span>
                 </div>
               ))}
-              {openTripTasks.slice(0, 4).map((task) => (
+              {(openTripTasks.length > 0 || (overdueChecklistItems.length === 0 && allOpenTasks.length > 0)) && (
+                <p className={`text-xs font-medium ${hasOverdueItems ? 'text-white/90 mt-2' : 'text-white/90'}`}>
+                  {hasOverdueItems ? 'Außerdem offen:' : 'Du musst noch:'}
+                </p>
+              )}
+              {openTripTasks.slice(0, 3).map((task) => (
                 <div key={task.id} className="flex items-center gap-2 text-sm text-white/85">
                   <span className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
                   <span className="truncate">{task.title}</span>
                 </div>
               ))}
-              {openTripTasks.length === 0 && openChecklistItems.length === 0 && allOpenTasks.slice(0, 4).map((task) => (
+              {openTripTasks.length === 0 && overdueChecklistItems.length === 0 && allOpenTasks.slice(0, 3).map((task) => (
                 <div key={task.id} className="flex items-center gap-2 text-sm text-white/85">
                   <span className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                  <span className="truncate">{task.title} erledigen</span>
+                  <span className="truncate">{task.title}</span>
                 </div>
               ))}
-              {(openChecklistItems.length + (openTripTasks.length || allOpenTasks.length)) > 4 && (
-                <p className="text-xs text-white/70 pl-3.5">
-                  und {openChecklistItems.length + (openTripTasks.length || allOpenTasks.length) - 4} weitere…
-                </p>
-              )}
             </div>
           )}
-          {openChecklistItems.length === 0 && openTripTasks.length === 0 && allOpenTasks.length === 0 && (
-            <div className="pt-3 border-t border-white/20">
+
+          {overdueChecklistItems.length === 0 && openTripTasks.length === 0 && allOpenTasks.length === 0 && (
+            <div className="mt-4 pt-4 border-t border-white/20 relative z-10">
               <p className="text-sm text-white/85 flex items-center gap-1.5">
                 <CheckCircle2 size={15} /> Alles erledigt – du bist startklar!
               </p>
@@ -232,28 +247,22 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </div>
       )}
 
-      {/* World clock */}
-      <Section title="Weltuhr" icon={<Globe size={16} className="text-sky-500" />}>
-        <div className="grid gap-2.5">
-          <WorldClockRow label="Deutschland" tz="Europe/Berlin" now={now} highlight />
-          {tripTimezones.map((entry) => (
-            <WorldClockRow key={entry.tz} label={entry.label} tz={entry.tz} now={now} />
-          ))}
-        </div>
-      </Section>
-
-      {/* Next flight with live status */}
+      {/* Flight card — airline, flight number, live tracking */}
       {nextFlight && (
-        <Section title="Nächster Flug" icon={<Plane size={16} className="text-sky-500" />}>
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Plane size={16} className="text-sky-500" />
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Flug</h2>
+          </div>
           <button
             onClick={() => setFlightDetailSegment(nextFlight)}
-            className="w-full text-left rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+            className="w-full text-left"
           >
             <div className="flex items-start justify-between mb-2">
               <div>
-                <p className="text-xs text-slate-400">{nextFlight.airline ?? 'Flug'}</p>
+                <p className="text-xs text-slate-400">{nextFlight.airline ?? 'Fluglinie'}</p>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white font-mono">
-                  {nextFlight.flight_number ?? 'Flug'}
+                  {nextFlight.flight_number ?? 'Flugnummer'}
                 </h3>
               </div>
               <FlightStatusBadge
@@ -275,34 +284,104 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300">Gate {nextFlight.last_known_gate}</span>
               )}
             </div>
-            {nextFlight.gate_changed && (
-              <div className="mt-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-xs text-orange-700 dark:text-orange-300 flex items-center gap-1.5">
-                <AlertCircle size={12} /> Gate-Wechsel: {nextFlight.previous_gate} → {nextFlight.last_known_gate}
-              </div>
-            )}
-            {nextFlight.last_flight_status === 'delayed' && nextFlight.delay_minutes && (
-              <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
-                <AlertCircle size={12} /> Verspätet: +{nextFlight.delay_minutes} Minuten
-              </div>
-            )}
-            {canRefreshFlight && (
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[10px] text-slate-400">Live-Status verfügbar</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => { e.stopPropagation(); handleRefreshFlight(); }}
-                  className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400"
+          </button>
+          {nextFlight.gate_changed && (
+            <div className="mt-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-xs text-orange-700 dark:text-orange-300 flex items-center gap-1.5">
+              <AlertCircle size={12} /> Gate-Wechsel: {nextFlight.previous_gate} → {nextFlight.last_known_gate}
+            </div>
+          )}
+          {nextFlight.last_flight_status === 'delayed' && nextFlight.delay_minutes && (
+            <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+              <AlertCircle size={12} /> Verspätet: +{nextFlight.delay_minutes} Minuten
+            </div>
+          )}
+          {/* Live tracking button */}
+          <button
+            onClick={() => onNavigate('reisen')}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white py-2.5 text-sm font-medium transition-colors"
+          >
+            <Navigation size={15} /> Live-Tracking
+          </button>
+          {canRefreshFlight && (
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">Live-Status verfügbar</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); handleRefreshFlight(); }}
+                className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400"
               >
                 <RefreshCw size={11} className={refreshingFlight ? 'animate-spin' : ''} /> Aktualisieren
               </span>
-              </div>
-            )}
-          </button>
-        </Section>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Overdue */}
+      {/* Train connection card */}
+      {nextTrainSegment && (
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Train size={16} className="text-emerald-500" />
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Bahnverbindung</h2>
+          </div>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-xs text-slate-400">Zug</p>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                {nextTrainSegment.train_number ?? nextTrainSegment.from_location ?? '—'}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-200">
+            <span>{nextTrainSegment.from_location ?? '—'}</span>
+            <Train size={16} className="text-slate-400" />
+            <span>{nextTrainSegment.to_location ?? '—'}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {nextTrainSegment.departure_date && <span className="flex items-center gap-1"><Calendar size={11} /> {formatRelativeDate(nextTrainSegment.departure_date)}</span>}
+            {nextTrainSegment.departure_time && <span className="flex items-center gap-1">{formatTime(nextTrainSegment.departure_time)}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* World clock — analog + digital, two clocks side by side */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2">
+            <Globe size={16} className="text-sky-500" />
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Weltuhr</h2>
+          </div>
+          <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+            <button
+              onClick={() => setClockStyle('analog')}
+              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
+                clockStyle === 'analog' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              Analog
+            </button>
+            <button
+              onClick={() => setClockStyle('digital')}
+              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
+                clockStyle === 'digital' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              Digital
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight />
+          {destinationTimezone ? (
+            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} />
+          ) : (
+            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed />
+          )}
+        </div>
+      </div>
+
+      {/* Overdue tasks */}
       {overdueTasks.length > 0 && (
         <Section title="Überfällig" count={overdueTasks.length} icon={<AlertCircle size={16} className="text-red-500" />}>
           <div className="space-y-2">
@@ -341,25 +420,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         )}
       </Section>
-
-      {/* Next trip */}
-      {nextTrip && (
-        <Section title="Nächste Reise" icon={<Plane size={16} className="text-sky-500" />}>
-          <button
-            onClick={() => onNavigate('reisen')}
-            className="w-full text-left rounded-2xl bg-gradient-to-br from-sky-500 to-primary-600 p-4 text-white shadow-lg shadow-sky-500/20"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-sky-100">Reise</p>
-                <h3 className="text-lg font-bold">{nextTrip.trip.name}</h3>
-                {nextTrip.trip.destination && <p className="text-sm text-sky-100">{nextTrip.trip.destination}</p>}
-              </div>
-              <ChevronRight size={20} className="text-sky-100" />
-            </div>
-          </button>
-        </Section>
-      )}
 
       {/* Upcoming */}
       {upcomingTasks.length > 0 && (
@@ -440,35 +500,99 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-function WorldClockRow({ label, tz, now, highlight }: { label: string; tz: string; now: number; highlight?: boolean }) {
+function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
+  label: string;
+  subLabel: string;
+  tz: string;
+  now: number;
+  style: ClockStyle;
+  highlight?: boolean;
+  dimmed?: boolean;
+}) {
   const { time, date, offset } = formatTimeInZone(tz);
-  const isDifferentDay = (() => {
-    const germanDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }).format(new Date(now));
-    const localDay = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(new Date(now));
-    return germanDay !== localDay;
-  })();
+
+  if (style === 'analog') {
+    return (
+      <div className={`rounded-2xl border p-4 flex flex-col items-center ${
+        highlight
+          ? 'bg-primary-50 dark:bg-primary-950/30 border-primary-100 dark:border-primary-900/40'
+          : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
+      } ${dimmed ? 'opacity-50' : ''}`}>
+        <AnalogClock tz={tz} now={now} highlight={highlight} />
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2 truncate w-full text-center">{label}</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums font-mono">{date}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`flex items-center gap-3 rounded-xl border p-3.5 ${
+    <div className={`rounded-2xl border p-4 flex flex-col items-center justify-center min-h-[140px] ${
       highlight
-        ? 'bg-primary-50 dark:bg-primary-950/30 border-primary-100 dark:border-primary-900/40'
-        : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
-    }`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-        highlight ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-      }`}>
-        <Clock size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{label}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {date}{isDifferentDay && <span className="text-amber-500 dark:text-amber-400 ml-1">(anderer Tag)</span>}
-        </p>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-lg font-bold tabular-nums text-slate-900 dark:text-white font-mono">{time}</p>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500">{offset}</p>
-      </div>
+        ? 'bg-gradient-to-br from-primary-600 to-sky-600 border-primary-400 text-white'
+        : 'bg-slate-900 dark:bg-slate-800 border-slate-700 text-white'
+    } ${dimmed ? 'opacity-50' : ''}`}>
+      <p className="text-sm font-medium truncate w-full text-center mb-1">{label}</p>
+      <p className={`text-[10px] mb-3 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
+      <p className="text-2xl font-bold tabular-nums font-mono tracking-wider">{time}</p>
+      <p className={`text-[10px] mt-1 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
     </div>
+  );
+}
+
+function AnalogClock({ tz, now, highlight }: { tz: string; now: number; highlight?: boolean }) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  }).formatToParts(new Date(now));
+
+  const h = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10) % 12;
+  const m = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+  const s = parseInt(parts.find((p) => p.type === 'second')?.value ?? '0', 10);
+
+  const hourAngle = (h * 30) + (m * 0.5);
+  const minuteAngle = (m * 6) + (s * 0.1);
+  const secondAngle = s * 6;
+
+  return (
+    <svg viewBox="0 0 100 100" className="w-24 h-24">
+      {/* Face */}
+      <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? '#3b82f6' : '#334155'} strokeWidth="2" />
+      {/* Hour markers */}
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
+        const angle = (i * 30 - 90) * (Math.PI / 180);
+        const x1 = 50 + 38 * Math.cos(angle);
+        const y1 = 50 + 38 * Math.sin(angle);
+        const x2 = 50 + 42 * Math.cos(angle);
+        const y2 = 50 + 42 * Math.sin(angle);
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={highlight ? '#475569' : '#64748b'} strokeWidth="1.5" strokeLinecap="round" />;
+      })}
+      {/* Hour hand */}
+      <line
+        x1="50" y1="50"
+        x2={50 + 22 * Math.cos((hourAngle - 90) * (Math.PI / 180))}
+        y2={50 + 22 * Math.sin((hourAngle - 90) * (Math.PI / 180))}
+        stroke={highlight ? '#1e293b' : '#e2e8f0'} strokeWidth="3" strokeLinecap="round"
+      />
+      {/* Minute hand */}
+      <line
+        x1="50" y1="50"
+        x2={50 + 32 * Math.cos((minuteAngle - 90) * (Math.PI / 180))}
+        y2={50 + 32 * Math.sin((minuteAngle - 90) * (Math.PI / 180))}
+        stroke={highlight ? '#1e293b' : '#e2e8f0'} strokeWidth="2" strokeLinecap="round"
+      />
+      {/* Second hand */}
+      <line
+        x1="50" y1="50"
+        x2={50 + 35 * Math.cos((secondAngle - 90) * (Math.PI / 180))}
+        y2={50 + 35 * Math.sin((secondAngle - 90) * (Math.PI / 180))}
+        stroke={highlight ? '#3b82f6' : '#38bdf8'} strokeWidth="1" strokeLinecap="round"
+      />
+      {/* Center dot */}
+      <circle cx="50" cy="50" r="3" fill={highlight ? '#3b82f6' : '#38bdf8'} />
+    </svg>
   );
 }

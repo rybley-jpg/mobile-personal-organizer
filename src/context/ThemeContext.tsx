@@ -10,6 +10,8 @@ interface ThemeContextValue {
   accentId: string;
   setAccentId: (id: string) => void;
   accentPresets: AccentPreset[];
+  bgEnabled: boolean;
+  setBgEnabled: (v: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -28,6 +30,7 @@ function getInitialAccentId(): string {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
   const [accentId, setAccentIdState] = useState<string>(getInitialAccentId);
+  const [bgEnabled, setBgEnabledState] = useState<boolean>(() => localStorage.getItem('klarly-bg') === 'true');
 
   useEffect(() => {
     const root = document.documentElement;
@@ -47,9 +50,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = (t: Theme) => setThemeState(t);
   const toggleTheme = () => setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
   const setAccentId = (id: string) => setAccentIdState(id);
+  const setBgEnabled = (v: boolean) => {
+    setBgEnabledState(v);
+    localStorage.setItem('klarly-bg', String(v));
+  };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, accentId, setAccentId, accentPresets: ACCENT_PRESETS }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, accentId, setAccentId, accentPresets: ACCENT_PRESETS, bgEnabled, setBgEnabled }}>
       {children}
     </ThemeContext.Provider>
   );

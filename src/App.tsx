@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Home, CheckSquare, Plane, Users, LayoutGrid, Plus } from 'lucide-react';
-import { ThemeProvider } from '@/context/ThemeContext';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { OrganizerProvider } from '@/context/OrganizerContext';
+import { OrganizerProvider, useOrganizer } from '@/context/OrganizerContext';
 import { Login } from '@/screens/Login';
 import { Dashboard } from '@/screens/Dashboard';
 import { Tasks } from '@/screens/Tasks';
@@ -10,7 +10,9 @@ import { Trips } from '@/screens/Trips';
 import { Contacts } from '@/screens/Contacts';
 import { More } from '@/screens/More';
 import { Search } from '@/screens/Search';
-import { TaskEditor } from '@/components/TaskEditor';type Tab = 'heute' | 'aufgaben' | 'reisen' | 'kontakte' | 'mehr';
+import { TaskEditor } from '@/components/TaskEditor';
+
+type Tab = 'heute' | 'aufgaben' | 'reisen' | 'kontakte' | 'mehr';
 
 const TABS: { key: Tab; label: string; icon: typeof Home }[] = [
   { key: 'heute', label: 'Heute', icon: Home },
@@ -22,10 +24,18 @@ const TABS: { key: Tab; label: string; icon: typeof Home }[] = [
 
 function AppShell() {
   const { user, loading } = useAuth();
+  const { bgEnabled } = useTheme();
+  const { tripsApi } = useOrganizer();
   const [tab, setTab] = useState<Tab>('heute');
   const [searchOpen, setSearchOpen] = useState(false);
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const nextTripDestination = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = tripsApi.trips.find((t) => t.destination);
+    return upcoming?.destination ?? null;
+  }, [tripsApi.trips]);
 
   useEffect(() => {
     const checkOverlay = () => {
@@ -54,7 +64,12 @@ function AppShell() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 w-full mx-auto relative">
-      <main className="min-h-screen w-full md:max-w-2xl md:mx-auto lg:max-w-3xl pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))]">
+      {bgEnabled && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center">
+          <CountrySilhouette destination={nextTripDestination} />
+        </div>
+      )}
+      <main className="min-h-screen w-full md:max-w-2xl md:mx-auto lg:max-w-3xl pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))] relative z-10">
         {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} />}
         {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} />}
         {tab === 'reisen' && <Trips />}
@@ -111,5 +126,21 @@ export default function App() {
         </OrganizerProvider>
       </AuthProvider>
     </ThemeProvider>
+  );
+}
+
+function CountrySilhouette({ destination }: { destination: string | null }) {
+  const label = destination ?? 'Deutschland';
+  return (
+    <div className="flex flex-col items-center opacity-[0.06] dark:opacity-[0.04]">
+      <svg viewBox="0 0 200 200" className="w-[80vw] max-w-[500px] h-auto">
+        <path
+          d="M100 20 C130 20, 160 35, 170 60 C180 85, 175 120, 165 140 C155 160, 130 180, 100 180 C70 180, 45 160, 35 140 C25 120, 20 85, 30 60 C40 35, 70 20, 100 20 Z"
+          fill="currentColor"
+          className="text-primary-600"
+        />
+      </svg>
+      <p className="text-7xl font-bold text-primary-600 mt-4 tracking-tight">{label}</p>
+    </div>
   );
 }

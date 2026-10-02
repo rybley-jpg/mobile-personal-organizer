@@ -35,6 +35,15 @@ function findStateByCallsign(states: number[][], callsign: string): number[] | n
   return null;
 }
 
+const IATA_TO_ICAO: Record<string, string> = {
+  LH: "DLH", ET: "ETH", EK: "UAE", QR: "QTR", TK: "THY", EW: "EWG",
+  DE: "CFG", FR: "RYR", U2: "EZY", BA: "BAW", AF: "AFR", KL: "KLM",
+  IB: "IBE", AZ: "ITY", OS: "AUA", SK: "SAS", LX: "SWR", AY: "FIN",
+  UA: "UAL", DL: "DAL", AA: "AAL", AC: "ACA", QF: "QFA", SQ: "SIA",
+  NH: "ANA", JL: "JAL", CX: "CPA", KE: "KAL", TG: "THA", MH: "MAS",
+  EY: "ETD", WN: "SWA", B6: "JBU", VS: "VIR", VY: "VOE", WK: "WBK",
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -58,42 +67,46 @@ Deno.serve(async (req: Request) => {
 
     if (aviationKey) {
       const apiUrl = `https://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(aviationKey)}&airline_iata=${encodeURIComponent(airlineIata)}&flight_iata=${encodeURIComponent(airlineIata + flight)}&flight_date=${encodeURIComponent(date)}`;
-      const apiRes = await fetch(apiUrl);
-      if (apiRes.ok) {
-        const apiData = await apiRes.json();
-        const fd = apiData?.data?.[0];
-        if (fd) {
-          const statusMap: Record<string, string> = {
-            scheduled: "scheduled", delayed: "delayed", boarding: "boarding",
-            departed: "departed", "en-route": "departed", arrived: "arrived",
-            cancelled: "cancelled", diverted: "diverted",
-          };
-          const delay = fd.departure?.delay ?? fd.arrival?.delay ?? null;
-          const gate = fd.departure?.gate ?? fd.arrival?.gate ?? null;
-          const terminal = fd.departure?.terminal ?? fd.arrival?.terminal ?? null;
-          return new Response(JSON.stringify({
-            status: statusMap[fd.flight_status] ?? "scheduled",
-            scheduledDeparture: fd.departure?.scheduledTime ?? fd.departure?.scheduled ?? null,
-            actualDeparture: fd.departure?.actualTime ?? fd.departure?.actual ?? null,
-            estimatedDeparture: fd.departure?.estimatedTime ?? fd.departure?.estimated ?? null,
-            scheduledArrival: fd.arrival?.scheduledTime ?? fd.arrival?.scheduled ?? null,
-            actualArrival: fd.arrival?.actualTime ?? fd.arrival?.actual ?? null,
-            estimatedArrival: fd.arrival?.estimatedTime ?? fd.arrival?.estimated ?? null,
-            delayMinutes: delay ? Math.round(delay) : null,
-            gate: gate ? String(gate) : null,
-            previousGate: null,
-            terminal: terminal ? String(terminal) : null,
-            aircraft: fd.aircraft?.registration ?? null,
-            cancelled: fd.flight_status === "cancelled",
-            diverted: fd.flight_status === "diverted",
-            lastUpdated: new Date().toISOString(),
-            source: "aviationstack",
-          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      try {
+        const apiRes = await fetch(apiUrl);
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          const fd = apiData?.data?.[0];
+          if (fd) {
+            const statusMap: Record<string, string> = {
+              scheduled: "scheduled", delayed: "delayed", boarding: "boarding",
+              departed: "departed", "en-route": "departed", arrived: "arrived",
+              cancelled: "cancelled", diverted: "diverted",
+            };
+            const delay = fd.departure?.delay ?? fd.arrival?.delay ?? null;
+            const gate = fd.departure?.gate ?? fd.arrival?.gate ?? null;
+            const terminal = fd.departure?.terminal ?? fd.arrival?.terminal ?? null;
+            return new Response(JSON.stringify({
+              status: statusMap[fd.flight_status] ?? "scheduled",
+              scheduledDeparture: fd.departure?.scheduledTime ?? fd.departure?.scheduled ?? null,
+              actualDeparture: fd.departure?.actualTime ?? fd.departure?.actual ?? null,
+              estimatedDeparture: fd.departure?.estimatedTime ?? fd.departure?.estimated ?? null,
+              scheduledArrival: fd.arrival?.scheduledTime ?? fd.arrival?.scheduled ?? null,
+              actualArrival: fd.arrival?.actualTime ?? fd.arrival?.actual ?? null,
+              estimatedArrival: fd.arrival?.estimatedTime ?? fd.arrival?.estimated ?? null,
+              delayMinutes: delay ? Math.round(delay) : null,
+              gate: gate ? String(gate) : null,
+              previousGate: null,
+              terminal: terminal ? String(terminal) : null,
+              aircraft: fd.aircraft?.registration ?? null,
+              cancelled: fd.flight_status === "cancelled",
+              diverted: fd.flight_status === "diverted",
+              lastUpdated: new Date().toISOString(),
+              source: "aviationstack",
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
         }
+      } catch {
+        // fall through to OpenSky
       }
     }
 
-    const icao = airlineIcao ?? null;
+    const icao = airlineIcao ?? IATA_TO_ICAO[airlineIata.toUpperCase()] ?? null;
     if (icao) {
       const callsign = `${icao}${flight}`;
       const states = await getOpenSkyStates();

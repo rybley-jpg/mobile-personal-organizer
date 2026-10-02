@@ -2,7 +2,7 @@ export type Priority = 'niedrig' | 'normal' | 'hoch';
 export type TaskStatus = 'offen' | 'erledigt';
 export type RepeatRule = 'taeglich' | 'woechentlich' | 'monatlich' | 'jaehrlich';
 export type ReminderOffset = 'none' | 'at_time' | '15m' | '1h' | '2h' | '1d' | '3d' | '7d';
-export type SegmentType = 'flug' | 'hotel' | 'mietwagen' | 'sonstiges';
+export type SegmentType = 'flug' | 'hotel' | 'mietwagen' | 'bahn' | 'sonstiges';
 export type FlightStatus = 'scheduled' | 'delayed' | 'boarding' | 'departed' | 'arrived' | 'cancelled' | 'diverted';
 export type TravelClass = 'Economy' | 'Premium Economy' | 'Business' | 'First';
 export type CheckInReminderOffset = '48h' | '24h' | '12h' | '6h' | 'custom' | 'none';
@@ -85,6 +85,10 @@ export interface TripSegment {
   checkin_open: boolean;
   price_amount: number | null;
   price_currency: string | null;
+  train_number: string | null;
+  wagon: string | null;
+  seat_number: string | null;
+  platform: string | null;
 }
 
 export interface Contact {
@@ -116,6 +120,7 @@ export interface TravelChecklistItem {
   checked: boolean;
   is_custom: boolean;
   sort_index: number;
+  deadline: string | null;
   created_at: string;
 }
 
@@ -168,6 +173,7 @@ export const SEGMENT_TYPE_LABELS: Record<SegmentType, string> = {
   flug: 'Flug',
   hotel: 'Hotel',
   mietwagen: 'Mietwagen',
+  bahn: 'Bahn',
   sonstiges: 'Sonstiges',
 };
 

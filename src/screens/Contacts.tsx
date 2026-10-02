@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Plus, Phone, Mail, Trash2, Building2, Search as SearchIcon } from 'lucide-react';
+import { Plus, Phone, Mail, Trash2, Building2, Search as SearchIcon, ContactRound } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Contact } from '@/types';
 import { Sheet } from '@/components/ui/Sheet';
+import { Capacitor } from '@capacitor/core';
+import { Contacts as ContactsPlugin } from '@capacitor/contacts';
 
 interface ContactsProps {
   onOpenSearch: () => void;
@@ -153,6 +155,7 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
   const { contactsApi } = useOrganizer();
   const [form, setForm] = useState({ name: '', organization: '', phone: '', phone_alt: '', email: '', category: '', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
@@ -174,6 +177,42 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
     }
   };
 
+  const pickFromAddressBook = async () => {
+    setPickError(null);
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        setPickError('Adressbuch-Zugriff nur auf dem Handy verfügbar.');
+        return;
+      }
+      const perm = await ContactsPlugin.requestPermissions();
+      if (perm.contacts !== 'granted') {
+        setPickError('Zugriff auf Adressbuch verweigert.');
+        return;
+      }
+      const result = await ContactsPlugin.pickContact();
+      const c = result.contact;
+      const name = [c.givenName, c.familyName].filter(Boolean).join(' ').trim() || c.displayName?.trim() || '';
+      if (!name) {
+        setPickError('Kein Name im gewählten Kontakt gefunden.');
+        return;
+      }
+      const phone = c.phoneNumbers?.[0]?.number ?? '';
+      const email = c.emails?.[0]?.address ?? '';
+      const org = c.organizationName ?? '';
+      setForm({
+        name,
+        organization: org,
+        phone,
+        phone_alt: c.phoneNumbers?.[1]?.number ?? '',
+        email,
+        category: '',
+        notes: '',
+      });
+    } catch {
+      setPickError('Kontakt konnte nicht ausgewählt werden.');
+    }
+  };
+
   return (
     <Sheet
       open={open}
@@ -189,6 +228,16 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
       }
     >
       <div className="space-y-3">
+        <button
+          onClick={pickFromAddressBook}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-950/30 text-primary-700 dark:text-primary-300 py-2.5 text-sm font-medium transition-colors hover:bg-primary-100 dark:hover:bg-primary-950/50"
+        >
+          <ContactRound size={16} /> Aus Adressbuch wählen
+        </button>
+        {pickError && (
+          <p className="text-xs text-red-500 dark:text-red-400 text-center">{pickError}</p>
+        )}
+        <div className="h-px bg-slate-100 dark:bg-slate-800" />
         <FormField label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} autoFocus />
         <FormField label="Organisation" value={form.organization} onChange={(v) => setForm({ ...form, organization: v })} />
         <FormField label="Telefon" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} type="tel" />
