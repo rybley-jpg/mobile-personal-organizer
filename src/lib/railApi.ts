@@ -11,6 +11,8 @@ export interface TrainStatusData {
   actualArrival: string | null;
   cancelled: boolean;
   lastUpdated: string | null;
+  station?: string;
+  source?: string;
 }
 
 export interface RailDataProvider {
@@ -20,11 +22,58 @@ export interface RailDataProvider {
 
 class EdgeFunctionRailDataProvider implements RailDataProvider {
   isConfigured(): boolean {
-    return false;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!(supabaseUrl && anonKey);
   }
 
-  async getTrainStatus(_trainNumber: string, _date: string, _station?: string): Promise<TrainStatusData | null> {
-    return null;
+  async getTrainStatus(trainNumber: string, date: string, station?: string): Promise<TrainStatusData | null> {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) return null;
+
+      const params = new URLSearchParams({
+        train: trainNumber,
+        date,
+      });
+      if (station) params.set('station', station);
+
+      const url = `${supabaseUrl}/functions/v1/rail-status?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${anonKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || data.error) return null;
+
+      const statusMap: Record<string, TrainStatus> = {
+        on_time: 'on_time',
+        delayed: 'delayed',
+        cancelled: 'cancelled',
+      };
+
+      return {
+        status: statusMap[data.status] ?? 'unknown',
+        delayMinutes: data.delayMinutes ?? null,
+        platform: data.platform ?? null,
+        previousPlatform: data.previousPlatform ?? null,
+        scheduledDeparture: data.scheduledDeparture ?? null,
+        actualDeparture: data.actualDeparture ?? null,
+        scheduledArrival: data.scheduledArrival ?? null,
+        actualArrival: data.actualArrival ?? null,
+        cancelled: data.cancelled ?? false,
+        lastUpdated: data.lastUpdated ?? null,
+        station: data.station,
+        source: data.source,
+      };
+    } catch {
+      return null;
+    }
   }
 }
 

@@ -26,9 +26,9 @@ export function TrainDetail({ segment, open, onClose, tripName }: TrainDetailPro
     try {
       const result = await fetchAndStoreTrainStatus(segment, tripsApi.updateSegment);
       if (!result && !isRailApiConfigured()) {
-        setLiveError('Live-Daten der Deutschen Bahn noch nicht konfiguriert. Die Verbindung wurde manuell eingegeben.');
+        setLiveError('Live-Daten momentan nicht verfügbar. Entweder sind die DB-API-Zugangsdaten noch nicht hinterlegt oder die Verbindung konnte nicht gefunden werden.');
       } else if (!result) {
-        setLiveError('Keine aktuellen Zugdaten verfügbar.');
+        setLiveError('Zug nicht in den Live-Daten gefunden. Prüfe Zugnummer und Abfahrtsbahnhof.');
       }
     } catch {
       setLiveError('Live-Daten konnten nicht abgerufen werden.');
@@ -132,7 +132,7 @@ export function TrainDetail({ segment, open, onClose, tripName }: TrainDetailPro
 
           {!hasLiveStatus && !liveError && (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <Clock size={14} /> Live-Daten der Deutschen Bahn noch nicht konfiguriert. Die Verbindung wurde manuell eingegeben.
+              <Clock size={14} /> Tippe auf "Aktualisieren", um Live-Daten von der Deutschen Bahn abzufragen. Beim ersten Abruf kann es kurz dauern.
             </div>
           )}
 

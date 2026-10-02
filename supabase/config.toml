@@ -1,2 +1,5 @@
 [functions.flight-status]
 verify_jwt = false
+
+[functions.rail-status]
+verify_jwt = false
