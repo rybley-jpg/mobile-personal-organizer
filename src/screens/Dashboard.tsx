@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, Trash2 } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { TaskItem } from '@/components/TaskItem';
 import { TaskEditor } from '@/components/TaskEditor';
@@ -11,10 +11,9 @@ import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flig
 
 interface DashboardProps {
   onNavigate: (tab: string) => void;
-  onAddTask: () => void;
 }
 
-export function Dashboard({ onNavigate, onAddTask }: DashboardProps) {
+export function Dashboard({ onNavigate }: DashboardProps) {
   const { tasksApi, tripsApi } = useOrganizer();
   const { tasks } = tasksApi;
   const allSegments = tripsApi.segments;
@@ -84,12 +83,6 @@ export function Dashboard({ onNavigate, onAddTask }: DashboardProps) {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Hallo!</h1>
         </div>
       </header>
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <QuickAction icon={<Plus size={18} />} label="Aufgabe" onClick={onAddTask} />
-        <QuickAction icon={<Plane size={18} />} label="Reise" onClick={() => onNavigate('reisen')} />
-      </div>
 
       {/* Next flight with live status */}
       {nextFlight && (
@@ -263,22 +256,6 @@ export function Dashboard({ onNavigate, onAddTask }: DashboardProps) {
         />
       )}
     </div>
-  );
-}
-
-function QuickAction({ icon, label, onClick, highlight }: { icon: React.ReactNode; label: string; onClick: () => void; highlight?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1.5 h-20 rounded-2xl border transition-all active:scale-95 ${
-        highlight
-          ? 'bg-primary-600 border-primary-600 text-white shadow-lg shadow-primary-600/30'
-          : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-200'
-      }`}
-    >
-      {icon}
-      <span className="text-xs font-medium">{label}</span>
-    </button>
   );
 }
 

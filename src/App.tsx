@@ -55,7 +55,7 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 w-full mx-auto relative">
       <main className="min-h-screen w-full md:max-w-2xl md:mx-auto lg:max-w-3xl pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))]">
-        {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} onAddTask={() => setTaskEditorOpen(true)} />}
+        {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} />}
         {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} />}
         {tab === 'reisen' && <Trips />}
         {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} />}
