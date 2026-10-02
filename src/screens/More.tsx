@@ -13,9 +13,29 @@ const COLOR_OPTIONS = ['#64748b', '#2563eb', '#ec4899', '#0ea5e9', '#f59e0b', '#
 export function More() {
   const { theme, toggleTheme, accentId, setAccentId, accentPresets, bgEnabled, setBgEnabled } = useTheme();
   const { categoriesApi } = useOrganizer();
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateName } = useAuth();
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  const displayName = user?.user_metadata?.name ?? user?.user_metadata?.full_name ?? user?.user_metadata?.first_name ?? '';
+
+  const handleSaveName = async () => {
+    if (!nameValue.trim()) return;
+    setNameSaving(true);
+    setNameError(null);
+    try {
+      await updateName(nameValue.trim());
+      setEditingName(false);
+    } catch {
+      setNameError('Name konnte nicht gespeichert werden.');
+    } finally {
+      setNameSaving(false);
+    }
+  };
 
   return (
     <div className="px-4 pt-6 pb-[calc(96px+env(safe-area-inset-bottom))]">
@@ -31,8 +51,47 @@ export function More() {
                 <User size={18} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user?.email}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Angemeldet</p>
+                {editingName ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      placeholder="Dein Rufname"
+                      autoFocus
+                      className="w-full h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
+                    />
+                    {nameError && <p className="text-xs text-red-500">{nameError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditingName(false); setNameError(null); }}
+                        className="px-3 h-8 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-medium"
+                      >
+                        Abbrechen
+                      </button>
+                      <button
+                        onClick={handleSaveName}
+                        disabled={!nameValue.trim() || nameSaving}
+                        className="px-3 h-8 rounded-lg bg-primary-600 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {nameSaving ? 'Speichert…' : 'Speichern'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                      {displayName || 'Kein Name gesetzt'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                    <button
+                      onClick={() => { setNameValue(displayName); setEditingName(true); }}
+                      className="text-xs text-primary-600 dark:text-primary-400 font-medium mt-1"
+                    >
+                      {displayName ? 'Name ändern' : 'Rufname festlegen'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <button

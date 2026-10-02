@@ -18,6 +18,21 @@ interface DashboardProps {
 
 type ClockStyle = 'analog' | 'digital';
 
+const CLOCK_COLOR_PRESETS = [
+  { id: 'blue', color: '#3b82f6' },
+  { id: 'teal', color: '#14b8a6' },
+  { id: 'green', color: '#22c55e' },
+  { id: 'orange', color: '#f97316' },
+  { id: 'rose', color: '#f43f5e' },
+  { id: 'amber', color: '#f59e0b' },
+  { id: 'cyan', color: '#06b6d4' },
+  { id: 'red', color: '#ef4444' },
+  { id: 'violet', color: '#8b5cf6' },
+  { id: 'pink', color: '#ec4899' },
+  { id: 'emerald', color: '#10b981' },
+  { id: 'indigo', color: '#6366f1' },
+];
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { tasksApi, tripsApi } = useOrganizer();
   const { user } = useAuth();
@@ -30,6 +45,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [overdueChecklistItems, setOverdueChecklistItems] = useState<{ label: string }[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [clockStyle, setClockStyle] = useState<ClockStyle>('analog');
+  const [clockColor, setClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-color') || '#3b82f6');
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -150,6 +166,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
     return null;
   }, [nextTrip, allSegments]);
+
+  const handleClockColorChange = (color: string) => {
+    setClockColor(color);
+    localStorage.setItem('klarly-clock-color', color);
+  };
 
   const handleRefreshFlight = async () => {
     if (!nextFlight) return;
@@ -372,12 +393,34 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight />
+          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={clockColor} />
           {destinationTimezone ? (
-            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} />
+            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={clockColor} />
           ) : (
-            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed />
+            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={clockColor} />
           )}
+        </div>
+        {/* Clock color picker */}
+        <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-0.5">Farbe:</span>
+          {CLOCK_COLOR_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handleClockColorChange(preset.color)}
+              className={`w-6 h-6 rounded-full transition-transform active:scale-90 ${clockColor === preset.color ? 'scale-125 ring-2 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
+              style={{ backgroundColor: preset.color, boxShadow: clockColor === preset.color ? `0 0 0 2px ${preset.color}` : undefined }}
+              aria-label={preset.id}
+            />
+          ))}
+          <label className="relative w-6 h-6 rounded-full overflow-hidden cursor-pointer ring-1 ring-slate-200 dark:ring-slate-700">
+            <input
+              type="color"
+              value={clockColor}
+              onChange={(e) => handleClockColorChange(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <span className="absolute inset-0 flex items-center justify-center text-[8px] text-slate-400">+</span>
+          </label>
         </div>
       </div>
 
@@ -500,7 +543,7 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
+function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentColor }: {
   label: string;
   subLabel: string;
   tz: string;
@@ -508,6 +551,7 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
   style: ClockStyle;
   highlight?: boolean;
   dimmed?: boolean;
+  accentColor: string;
 }) {
   const { time, date, offset } = formatTimeInZone(tz);
 
@@ -515,10 +559,12 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
     return (
       <div className={`rounded-2xl border p-4 flex flex-col items-center ${
         highlight
-          ? 'bg-primary-50 dark:bg-primary-950/30 border-primary-100 dark:border-primary-900/40'
+          ? 'border-2'
           : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
-      } ${dimmed ? 'opacity-50' : ''}`}>
-        <AnalogClock tz={tz} now={now} highlight={highlight} />
+      } ${dimmed ? 'opacity-50' : ''}`}
+      style={highlight ? { borderColor: accentColor, backgroundColor: `${accentColor}15` } : undefined}
+      >
+        <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} />
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2 truncate w-full text-center">{label}</p>
         <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums font-mono">{date}</p>
@@ -529,9 +575,11 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
   return (
     <div className={`rounded-2xl border p-4 flex flex-col items-center justify-center min-h-[140px] ${
       highlight
-        ? 'bg-gradient-to-br from-primary-600 to-sky-600 border-primary-400 text-white'
+        ? 'border-transparent text-white'
         : 'bg-slate-900 dark:bg-slate-800 border-slate-700 text-white'
-    } ${dimmed ? 'opacity-50' : ''}`}>
+    } ${dimmed ? 'opacity-50' : ''}`}
+    style={highlight ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)` } : undefined}
+    >
       <p className="text-sm font-medium truncate w-full text-center mb-1">{label}</p>
       <p className={`text-[10px] mb-3 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
       <p className="text-2xl font-bold tabular-nums font-mono tracking-wider">{time}</p>
@@ -540,7 +588,7 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed }: {
   );
 }
 
-function AnalogClock({ tz, now, highlight }: { tz: string; now: number; highlight?: boolean }) {
+function AnalogClock({ tz, now, highlight, accentColor }: { tz: string; now: number; highlight?: boolean; accentColor: string }) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
@@ -560,7 +608,7 @@ function AnalogClock({ tz, now, highlight }: { tz: string; now: number; highligh
   return (
     <svg viewBox="0 0 100 100" className="w-24 h-24">
       {/* Face */}
-      <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? '#3b82f6' : '#334155'} strokeWidth="2" />
+      <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? accentColor : '#334155'} strokeWidth="2" />
       {/* Hour markers */}
       {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
         const angle = (i * 30 - 90) * (Math.PI / 180);
@@ -589,10 +637,10 @@ function AnalogClock({ tz, now, highlight }: { tz: string; now: number; highligh
         x1="50" y1="50"
         x2={50 + 35 * Math.cos((secondAngle - 90) * (Math.PI / 180))}
         y2={50 + 35 * Math.sin((secondAngle - 90) * (Math.PI / 180))}
-        stroke={highlight ? '#3b82f6' : '#38bdf8'} strokeWidth="1" strokeLinecap="round"
+        stroke={accentColor} strokeWidth="1" strokeLinecap="round"
       />
       {/* Center dot */}
-      <circle cx="50" cy="50" r="3" fill={highlight ? '#3b82f6' : '#38bdf8'} />
+      <circle cx="50" cy="50" r="3" fill={accentColor} />
     </svg>
   );
 }

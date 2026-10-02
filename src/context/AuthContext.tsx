@@ -8,6 +8,7 @@ interface AuthState {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
+  updateName: (name: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -52,8 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const updateName = useCallback(async (name: string) => {
+    const { error } = await supabase.auth.updateUser({ data: { name } });
+    if (error) throw error;
+    setUser((prev) => prev ? { ...prev, user_metadata: { ...prev.user_metadata, name } } : prev);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, updateName, signOut }}>
       {children}
     </AuthContext.Provider>
   );
