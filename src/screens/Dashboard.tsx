@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, MapPin } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, RefreshCw, X, MapPin, Globe, Clock } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { TaskItem } from '@/components/TaskItem';
@@ -10,6 +10,7 @@ import { Task } from '@/types';
 import { sortTasks, isOverdue, isDueToday, formatRelativeDate, formatTime, formatDateShort, computeReminderAt, formatReminderCountdown, todayISO } from '@/lib/dateUtils';
 import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flightApi';
 import { supabase } from '@/lib/supabase';
+import { getAirportTimezone, getCityTimezone, formatTimeInZone } from '@/lib/timezoneData';
 
 interface DashboardProps {
   onNavigate: (tab: string) => void;
@@ -25,6 +26,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [flightDetailSegment, setFlightDetailSegment] = useState<typeof allSegments[number] | null>(null);
   const [refreshingFlight, setRefreshingFlight] = useState(false);
   const [openChecklistItems, setOpenChecklistItems] = useState<string[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -109,6 +111,32 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const allOpenTasks = useMemo(() => {
     return tasks.filter((t) => t.status === 'offen');
   }, [tasks]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const tripTimezones = useMemo(() => {
+    if (!nextTrip) return [];
+    const tzSet = new Map<string, { tz: string; label: string }>();
+    const tripSegs = allSegments.filter((s) => s.trip_id === nextTrip.trip.id);
+    for (const seg of tripSegs) {
+      if (seg.to_airport_code) {
+        const tz = getAirportTimezone(seg.to_airport_code);
+        if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: seg.to_airport_code });
+      }
+      if (seg.from_airport_code) {
+        const tz = getAirportTimezone(seg.from_airport_code);
+        if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: seg.from_airport_code });
+      }
+    }
+    if (nextTrip.trip.destination) {
+      const tz = getCityTimezone(nextTrip.trip.destination);
+      if (tz && !tzSet.has(tz.tz)) tzSet.set(tz.tz, { tz: tz.tz, label: nextTrip.trip.destination });
+    }
+    return Array.from(tzSet.values()).slice(0, 3);
+  }, [nextTrip, allSegments]);
 
   const handleRefreshFlight = async () => {
     if (!nextFlight) return;
@@ -203,6 +231,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           )}
         </div>
       )}
+
+      {/* World clock */}
+      <Section title="Weltuhr" icon={<Globe size={16} className="text-sky-500" />}>
+        <div className="grid gap-2.5">
+          <WorldClockRow label="Deutschland" tz="Europe/Berlin" now={now} highlight />
+          {tripTimezones.map((entry) => (
+            <WorldClockRow key={entry.tz} label={entry.label} tz={entry.tz} now={now} />
+          ))}
+        </div>
+      </Section>
 
       {/* Next flight with live status */}
       {nextFlight && (
@@ -398,6 +436,39 @@ function EmptyHint({ text }: { text: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-sm text-slate-400 dark:text-slate-500">
       {text}
+    </div>
+  );
+}
+
+function WorldClockRow({ label, tz, now, highlight }: { label: string; tz: string; now: number; highlight?: boolean }) {
+  const { time, date, offset } = formatTimeInZone(tz);
+  const isDifferentDay = (() => {
+    const germanDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }).format(new Date(now));
+    const localDay = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(new Date(now));
+    return germanDay !== localDay;
+  })();
+
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border p-3.5 ${
+      highlight
+        ? 'bg-primary-50 dark:bg-primary-950/30 border-primary-100 dark:border-primary-900/40'
+        : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
+    }`}>
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+        highlight ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+      }`}>
+        <Clock size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{label}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {date}{isDifferentDay && <span className="text-amber-500 dark:text-amber-400 ml-1">(anderer Tag)</span>}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-lg font-bold tabular-nums text-slate-900 dark:text-white font-mono">{time}</p>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500">{offset}</p>
+      </div>
     </div>
   );
 }
