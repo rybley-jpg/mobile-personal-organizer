@@ -6,76 +6,45 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// DB Timetables API v1 — auth: Basic (client_id:client_secret)
 const DB_API_BASE = "https://apis.deutschebahn.com/db-api-marketplace/apis/timetables/v1";
-const DB_TOKEN_URL = "https://apis.deutschebahn.com/konfigurator-api/oauth2/token";
 
-interface CachedToken {
-  token: string;
-  expiresAt: number;
-}
-
-let cachedToken: CachedToken | null = null;
-
-async function getDbAccessToken(): Promise<string | null> {
-  const clientId = Deno.env.get("DB_API_CLIENT_ID");
-  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
-
-  if (!clientId || !clientSecret) return null;
-
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-    return cachedToken.token;
-  }
-
-  try {
-    const body = new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-    });
-
-    const res = await fetch(DB_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    const token = data?.access_token;
-    if (!token) return null;
-
-    const expiresIn = data?.expires_in ?? 3600;
-    cachedToken = {
-      token,
-      expiresAt: Date.now() + expiresIn * 1000,
-    };
-    return token;
-  } catch {
-    return null;
-  }
-}
+let lastDiagnostic: { step: string; detail: string } | null = null;
 
 function isDbConfigured(): boolean {
   return !!(Deno.env.get("DB_API_CLIENT_ID") && Deno.env.get("DB_API_CLIENT_SECRET"));
 }
 
-async function dbFetch(path: string): Promise<Response | null> {
-  const token = await getDbAccessToken();
-  if (!token) return null;
+async function dbFetch(path: string): Promise<{ ok: boolean; status: number; text: string } | null> {
+  const clientId = Deno.env.get("DB_API_CLIENT_ID");
+  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return null;
 
-  try {
-    const res = await fetch(`${DB_API_BASE}${path}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/xml",
-      },
-    });
-    return res;
-  } catch {
-    return null;
+  const authHeaders = [
+    { Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`, Accept: "application/xml" },
+    { Authorization: `Bearer ${clientSecret}`, Accept: "application/xml" },
+    { Authorization: `Bearer ${clientId}`, Accept: "application/xml" },
+  ];
+
+  for (let i = 0; i < authHeaders.length; i++) {
+    try {
+      const res = await fetch(`${DB_API_BASE}${path}`, { headers: authHeaders[i] });
+      const text = await res.text();
+      if (res.ok) {
+        return { ok: true, status: res.status, text };
+      }
+      if (res.status === 401 && i < authHeaders.length - 1) {
+        continue;
+      }
+      lastDiagnostic = { step: `fetch ${path} (auth method ${i + 1})`, detail: `HTTP ${res.status}: ${text.slice(0, 300)}` };
+      return { ok: false, status: res.status, text };
+    } catch (err) {
+      lastDiagnostic = { step: `fetch ${path}`, detail: `Exception: ${err instanceof Error ? err.message : String(err)}` };
+      return null;
+    }
   }
+
+  return null;
 }
 
 interface StationResult {
@@ -84,18 +53,38 @@ interface StationResult {
 }
 
 async function findStation(query: string): Promise<StationResult | null> {
-  const res = await dbFetch(`/station/${encodeURIComponent(query)}`);
-  if (!res || !res.ok) return null;
+  const result = await dbFetch(`/station/${encodeURIComponent(query)}`);
+  if (!result) return null;
+  if (!result.ok) {
+    lastDiagnostic = { step: `station`, detail: `HTTP ${result.status}: ${result.text.slice(0, 300)}` };
+    return null;
+  }
 
-  const xml = await res.text();
-  const evaMatch = xml.match(/<eva[^>]*>(\d+)<\/eva>/i) || xml.match(/<eva[^>]*\s+evaNumber="(\d+)"/i);
-  const nameMatch = xml.match(/<name[^>]*>([^<]+)<\/name>/i);
-  if (!evaMatch) return null;
+  const xml = result.text;
 
-  return {
-    eva: evaMatch[1],
-    name: nameMatch ? nameMatch[1] : query,
-  };
+  // Format 1: <station eva="8000105" name="Frankfurt(Main)Hbf" .../>
+  const attrMatch = xml.match(/<station[^>]*\seva="(\d+)"[^>]*>/i);
+  if (attrMatch) {
+    const nameAttr = xml.match(/<station[^>]*\sname="([^"]+)"/i);
+    return { eva: attrMatch[1], name: nameAttr ? nameAttr[1] : query };
+  }
+
+  // Format 2: <eva>8000105</eva> as child element
+  const childEvaMatch = xml.match(/<eva[^>]*>(\d+)<\/eva>/i);
+  if (childEvaMatch) {
+    const childNameMatch = xml.match(/<name[^>]*>([^<]+)<\/name>/i);
+    return { eva: childEvaMatch[1], name: childNameMatch ? childNameMatch[1] : query };
+  }
+
+  // Format 3: try to find any evaNumber attribute
+  const evaNumAttr = xml.match(/evaNumber="(\d+)"/i);
+  if (evaNumAttr) {
+    const nameAttr = xml.match(/name="([^"]+)"/i) || xml.match(/<name[^>]*>([^<]+)<\/name>/i);
+    return { eva: evaNumAttr[1], name: nameAttr ? nameAttr[1] : query };
+  }
+
+  lastDiagnostic = { step: `station parse`, detail: `XML konnte nicht geparst werden. Erste 300 Zeichen: ${xml.slice(0, 300)}` };
+  return null;
 }
 
 interface TimetableEntry {
@@ -105,9 +94,8 @@ interface TimetableEntry {
   scheduledDeparture: string | null;
   scheduledArrival: string | null;
   scheduledPlatform: string | null;
-  actualDeparture: string | null;
-  actualArrival: string | null;
-  actualPlatform: string | null;
+  changedDeparture: string | null;
+  changedArrival: string | null;
   changedPlatform: string | null;
   delayDeparture: number | null;
   delayArrival: number | null;
@@ -123,20 +111,19 @@ function parseTimetableXml(xml: string): TimetableEntry[] {
     const id = sMatch[1];
     const sContent = sMatch[2];
 
-    const tnMatch = sContent.match(/<tl[^>]*\s+n="([^"]+)"/i) || sContent.match(/<tl[^>]*\s+trainNumber="([^"]+)"/i);
-    const tTypeMatch = sContent.match(/<tl[^>]*\s+c="([^"]+)"/i) || sContent.match(/<tl[^>]*\s+trainType="([^"]+)"/i);
+    const tnMatch = sContent.match(/<tl[^>]*\s+n="([^"]+)"/i);
+    const tTypeMatch = sContent.match(/<tl[^>]*\s+c="([^"]+)"/i);
     const trainNumber = tnMatch ? tnMatch[1] : "";
     const trainType = tTypeMatch ? tTypeMatch[1] : "";
 
-    const arMatch = sContent.match(/<ar[^>]*>/i);
-    const dpMatch = sContent.match(/<dp[^>]*>/i);
+    const arMatch = sContent.match(/<ar[^>]*\/?>/i);
+    const dpMatch = sContent.match(/<dp[^>]*\/?>/i);
 
     let scheduledDeparture: string | null = null;
     let scheduledArrival: string | null = null;
     let scheduledPlatform: string | null = null;
-    let actualDeparture: string | null = null;
-    let actualArrival: string | null = null;
-    let actualPlatform: string | null = null;
+    let changedDeparture: string | null = null;
+    let changedArrival: string | null = null;
     let changedPlatform: string | null = null;
     let delayDeparture: number | null = null;
     let delayArrival: number | null = null;
@@ -144,13 +131,15 @@ function parseTimetableXml(xml: string): TimetableEntry[] {
 
     if (arMatch) {
       const ar = arMatch[0];
-      const arTime = ar.match(/\sct="([^"]+)"/i);
-      if (arTime) scheduledArrival = arTime[1];
-      const arPlt = ar.match(/\spp="([^"]+)"/i) || ar.match(/\splatform="([^"]+)"/i);
-      if (arPlt) scheduledPlatform = arPlt[1];
-      const arCPlt = ar.match(/\scp="([^"]+)"/i) || ar.match(/\schangedPlatform="([^"]+)"/i);
-      if (arCPlt) changedPlatform = arCPlt[1];
-      const arDelay = ar.match(/\sdelay="(\d+)"/i);
+      const arPt = ar.match(/\spt="([^"]+)"/i);
+      if (arPt) scheduledArrival = arPt[1];
+      const arCt = ar.match(/\sct="([^"]+)"/i);
+      if (arCt) changedArrival = arCt[1];
+      const arPp = ar.match(/\spp="([^"]+)"/i);
+      if (arPp) scheduledPlatform = arPp[1];
+      const arCp = ar.match(/\scp="([^"]+)"/i);
+      if (arCp) changedPlatform = arCp[1];
+      const arDelay = ar.match(/\sdelay="(-?\d+)"/i);
       if (arDelay) delayArrival = parseInt(arDelay[1], 10);
       const arCancel = ar.match(/\scancelled="true"/i) || ar.match(/\scancelled="1"/i);
       if (arCancel) cancelled = true;
@@ -158,32 +147,25 @@ function parseTimetableXml(xml: string): TimetableEntry[] {
 
     if (dpMatch) {
       const dp = dpMatch[0];
-      const dpTime = dp.match(/\sct="([^"]+)"/i);
-      if (dpTime) scheduledDeparture = dpTime[1];
-      const dpPlt = dp.match(/\spp="([^"]+)"/i) || dp.match(/\splatform="([^"]+)"/i);
-      if (dpPlt && !scheduledPlatform) scheduledPlatform = dpPlt[1];
-      const dpCPlt = dp.match(/\scp="([^"]+)"/i) || dp.match(/\schangedPlatform="([^"]+)"/i);
-      if (dpCPlt && !changedPlatform) changedPlatform = dpCPlt[1];
-      const dpDelay = dp.match(/\sdelay="(\d+)"/i);
+      const dpPt = dp.match(/\spt="([^"]+)"/i);
+      if (dpPt) scheduledDeparture = dpPt[1];
+      const dpCt = dp.match(/\sct="([^"]+)"/i);
+      if (dpCt) changedDeparture = dpCt[1];
+      const dpPp = dp.match(/\spp="([^"]+)"/i);
+      if (dpPp && !scheduledPlatform) scheduledPlatform = dpPp[1];
+      const dpCp = dp.match(/\scp="([^"]+)"/i);
+      if (dpCp && !changedPlatform) changedPlatform = dpCp[1];
+      const dpDelay = dp.match(/\sdelay="(-?\d+)"/i);
       if (dpDelay) delayDeparture = parseInt(dpDelay[1], 10);
       const dpCancel = dp.match(/\scancelled="true"/i) || dp.match(/\scancelled="1"/i);
       if (dpCancel) cancelled = true;
     }
 
     entries.push({
-      id,
-      trainNumber,
-      trainType,
-      scheduledDeparture,
-      scheduledArrival,
-      scheduledPlatform,
-      actualDeparture,
-      actualArrival,
-      actualPlatform,
-      changedPlatform,
-      delayDeparture,
-      delayArrival,
-      cancelled,
+      id, trainNumber, trainType,
+      scheduledDeparture, scheduledArrival, scheduledPlatform,
+      changedDeparture, changedArrival, changedPlatform,
+      delayDeparture, delayArrival, cancelled,
     });
   }
 
@@ -191,10 +173,10 @@ function parseTimetableXml(xml: string): TimetableEntry[] {
 }
 
 async function applyChanges(evaNo: string, entries: TimetableEntry[]): Promise<void> {
-  const res = await dbFetch(`/fchg/${evaNo}`);
-  if (!res || !res.ok) return;
+  const result = await dbFetch(`/fchg/${evaNo}`);
+  if (!result || !result.ok) return;
 
-  const xml = await res.text();
+  const xml = result.text;
   const sBlockRegex = /<s[^>]*\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/s>/gi;
   let sMatch;
   while ((sMatch = sBlockRegex.exec(xml)) !== null) {
@@ -203,21 +185,25 @@ async function applyChanges(evaNo: string, entries: TimetableEntry[]): Promise<v
     const entry = entries.find((e) => e.id === id);
     if (!entry) continue;
 
-    const arMatch = sContent.match(/<ar[^>]*>/i);
-    const dpMatch = sContent.match(/<dp[^>]*>/i);
+    const arMatch = sContent.match(/<ar[^>]*\/?>/i);
+    const dpMatch = sContent.match(/<dp[^>]*\/?>/i);
 
     if (arMatch) {
       const ar = arMatch[0];
-      const arCPlt = ar.match(/\scp="([^"]+)"/i) || ar.match(/\schangedPlatform="([^"]+)"/i);
-      if (arCPlt) entry.changedPlatform = arCPlt[1];
+      const arCp = ar.match(/\scp="([^"]+)"/i);
+      if (arCp) entry.changedPlatform = arCp[1];
+      const arCt = ar.match(/\sct="([^"]+)"/i);
+      if (arCt) entry.changedArrival = arCt[1];
       const arCancel = ar.match(/\scancelled="true"/i) || ar.match(/\scancelled="1"/i);
       if (arCancel) entry.cancelled = true;
     }
 
     if (dpMatch) {
       const dp = dpMatch[0];
-      const dpCPlt = dp.match(/\scp="([^"]+)"/i) || dp.match(/\schangedPlatform="([^"]+)"/i);
-      if (dpCPlt) entry.changedPlatform = dpCPlt[1];
+      const dpCp = dp.match(/\scp="([^"]+)"/i);
+      if (dpCp) entry.changedPlatform = dpCp[1];
+      const dpCt = dp.match(/\sct="([^"]+)"/i);
+      if (dpCt) entry.changedDeparture = dpCt[1];
       const dpCancel = dp.match(/\scancelled="true"/i) || dp.match(/\scancelled="1"/i);
       if (dpCancel) entry.cancelled = true;
     }
@@ -255,8 +241,20 @@ Deno.serve(async (req: Request) => {
     const trainNumber = url.searchParams.get("train");
     const station = url.searchParams.get("station");
     const date = url.searchParams.get("date");
+    const debug = url.searchParams.get("debug") === "1";
 
     if (!trainNumber || !date) {
+      if (debug) {
+        const cid = Deno.env.get("DB_API_CLIENT_ID");
+        const cs = Deno.env.get("DB_API_CLIENT_SECRET");
+        return new Response(JSON.stringify({
+          debug: true,
+          clientIdLength: cid?.length ?? 0,
+          clientSecretLength: cs?.length ?? 0,
+          clientIdFirst3: cid ? cid.slice(0, 3) : null,
+          clientSecretFirst3: cs ? cs.slice(0, 3) : null,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       return new Response(JSON.stringify({
         error: "Parameter train und date erforderlich",
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -271,6 +269,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         error: "station_not_found",
         message: `Bahnhof "${station ?? '?'}" konnte nicht gefunden werden.`,
+        diagnostic: debug ? lastDiagnostic : undefined,
       }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -283,10 +282,9 @@ Deno.serve(async (req: Request) => {
     const entries: TimetableEntry[] = [];
     for (let h = 0; h < 24; h++) {
       const hourStr = String(h).padStart(2, '0');
-      const res = await dbFetch(`/plan/${stationResult.eva}/${dbDate}/${hourStr}`);
-      if (res && res.ok) {
-        const xml = await res.text();
-        entries.push(...parseTimetableXml(xml));
+      const result = await dbFetch(`/plan/${stationResult.eva}/${dbDate}/${hourStr}`);
+      if (result && result.ok) {
+        entries.push(...parseTimetableXml(result.text));
       }
     }
 
@@ -295,6 +293,7 @@ Deno.serve(async (req: Request) => {
         error: "no_timetable",
         message: "Keine Fahrplandaten für diesen Bahnhof an diesem Tag gefunden.",
         station: stationResult.name,
+        diagnostic: debug ? lastDiagnostic : undefined,
       }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -302,10 +301,13 @@ Deno.serve(async (req: Request) => {
 
     const match = matchTrainEntry(entries, trainNumber);
     if (!match) {
+      const availableTrains = entries.slice(0, 10).map((e) => `${e.trainType} ${e.trainNumber}`).filter(Boolean);
       return new Response(JSON.stringify({
         error: "train_not_found",
         message: `Zug "${trainNumber}" am Bahnhof "${stationResult.name}" am ${date} nicht gefunden.`,
         station: stationResult.name,
+        availableTrains: debug ? availableTrains : undefined,
+        totalEntries: entries.length,
       }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -328,9 +330,9 @@ Deno.serve(async (req: Request) => {
       platform,
       previousPlatform,
       scheduledDeparture: match.scheduledDeparture,
-      actualDeparture: match.actualDeparture,
+      actualDeparture: match.changedDeparture,
       scheduledArrival: match.scheduledArrival,
-      actualArrival: match.actualArrival,
+      actualArrival: match.changedArrival,
       cancelled: match.cancelled,
       lastUpdated: new Date().toISOString(),
       station: stationResult.name,
@@ -339,7 +341,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unbekannter Fehler";
     return new Response(
-      JSON.stringify({ error: "internal_error", message }),
+      JSON.stringify({ error: "internal_error", message, diagnostic: lastDiagnostic }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
