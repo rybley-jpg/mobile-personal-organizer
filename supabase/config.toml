@@ -3,3 +3,4 @@ verify_jwt = false
 
 [functions.rail-status]
 verify_jwt = false
+# v2 diagnostic deploy

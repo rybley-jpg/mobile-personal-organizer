@@ -6,8 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// DB Timetables API v1 — auth: Basic (client_id:client_secret)
 const DB_API_BASE = "https://apis.deutschebahn.com/db-api-marketplace/apis/timetables/v1";
+const DB_TOKEN_URL = "https://api.deutschebahn.com/konfigurator-api/oauth2/token";
+// v2: credential whitespace + charset diagnostics
 
 let lastDiagnostic: { step: string; detail: string } | null = null;
 
@@ -15,36 +16,113 @@ function isDbConfigured(): boolean {
   return !!(Deno.env.get("DB_API_CLIENT_ID") && Deno.env.get("DB_API_CLIENT_SECRET"));
 }
 
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+
+let cachedToken: CachedToken | null = null;
+
+async function getDbAccessToken(): Promise<string | null> {
+  const clientId = Deno.env.get("DB_API_CLIENT_ID");
+  const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
+
+  if (!clientId || !clientSecret) {
+    lastDiagnostic = { step: "token", detail: "Secrets DB_API_CLIENT_ID oder DB_API_CLIENT_SECRET fehlen" };
+    return null;
+  }
+
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
+    return cachedToken.token;
+  }
+
+  const trimmedId = clientId.trim();
+  const trimmedSecret = clientSecret.trim();
+
+  const tokenUrls = [
+    "https://api.deutschebahn.com/konfigurator-api/oauth2/token",
+    "https://apis.deutschebahn.com/konfigurator-api/oauth2/token",
+  ];
+
+  for (const tokenUrl of tokenUrls) {
+    try {
+      const basicAuth = btoa(`${trimmedId}:${trimmedSecret}`);
+      const body = new URLSearchParams({ grant_type: "client_credentials" });
+
+      let res = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Authorization": `Basic ${basicAuth}`,
+        },
+        body,
+      });
+
+      if (!res.ok) {
+        res = await fetch(tokenUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            grant_type: "client_credentials",
+            client_id: trimmedId,
+            client_secret: trimmedSecret,
+          }),
+        });
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        lastDiagnostic = { step: `token (${tokenUrl})`, detail: `HTTP ${res.status}: ${errText.slice(0, 300)}` };
+        continue;
+      }
+
+      const data = await res.json();
+      const token = data?.access_token;
+      if (!token) {
+        lastDiagnostic = { step: `token (${tokenUrl})`, detail: `Kein access_token: ${JSON.stringify(data).slice(0, 300)}` };
+        continue;
+      }
+
+      const expiresIn = data?.expires_in ?? 3600;
+      cachedToken = { token, expiresAt: Date.now() + expiresIn * 1000 };
+      lastDiagnostic = null;
+      return token;
+    } catch (err) {
+      lastDiagnostic = { step: `token (${tokenUrl})`, detail: `Exception: ${err instanceof Error ? err.message : String(err)}` };
+      continue;
+    }
+  }
+
+  return null;
+}
+
 async function dbFetch(path: string): Promise<{ ok: boolean; status: number; text: string } | null> {
   const clientId = Deno.env.get("DB_API_CLIENT_ID");
   const clientSecret = Deno.env.get("DB_API_CLIENT_SECRET");
   if (!clientId || !clientSecret) return null;
 
-  const authHeaders = [
-    { Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`, Accept: "application/xml" },
-    { Authorization: `Bearer ${clientSecret}`, Accept: "application/xml" },
-    { Authorization: `Bearer ${clientId}`, Accept: "application/xml" },
-  ];
+  const token = await getDbAccessToken();
 
-  for (let i = 0; i < authHeaders.length; i++) {
-    try {
-      const res = await fetch(`${DB_API_BASE}${path}`, { headers: authHeaders[i] });
-      const text = await res.text();
-      if (res.ok) {
-        return { ok: true, status: res.status, text };
-      }
-      if (res.status === 401 && i < authHeaders.length - 1) {
-        continue;
-      }
-      lastDiagnostic = { step: `fetch ${path} (auth method ${i + 1})`, detail: `HTTP ${res.status}: ${text.slice(0, 300)}` };
-      return { ok: false, status: res.status, text };
-    } catch (err) {
-      lastDiagnostic = { step: `fetch ${path}`, detail: `Exception: ${err instanceof Error ? err.message : String(err)}` };
-      return null;
-    }
+  const headers: Record<string, string> = { Accept: "application/xml" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    headers["Authorization"] = `Basic ${btoa(`${clientId.trim()}:${clientSecret.trim()}`)}`;
   }
 
-  return null;
+  try {
+    const res = await fetch(`${DB_API_BASE}${path}`, { headers });
+    const text = await res.text();
+    if (!res.ok) {
+      lastDiagnostic = { step: `fetch ${path}`, detail: `HTTP ${res.status}: ${text.slice(0, 300)}` };
+    }
+    return { ok: res.ok, status: res.status, text };
+  } catch (err) {
+    lastDiagnostic = { step: `fetch ${path}`, detail: `Exception: ${err instanceof Error ? err.message : String(err)}` };
+    return null;
+  }
 }
 
 interface StationResult {
@@ -54,29 +132,22 @@ interface StationResult {
 
 async function findStation(query: string): Promise<StationResult | null> {
   const result = await dbFetch(`/station/${encodeURIComponent(query)}`);
-  if (!result) return null;
-  if (!result.ok) {
-    lastDiagnostic = { step: `station`, detail: `HTTP ${result.status}: ${result.text.slice(0, 300)}` };
-    return null;
-  }
+  if (!result || !result.ok) return null;
 
   const xml = result.text;
 
-  // Format 1: <station eva="8000105" name="Frankfurt(Main)Hbf" .../>
   const attrMatch = xml.match(/<station[^>]*\seva="(\d+)"[^>]*>/i);
   if (attrMatch) {
     const nameAttr = xml.match(/<station[^>]*\sname="([^"]+)"/i);
     return { eva: attrMatch[1], name: nameAttr ? nameAttr[1] : query };
   }
 
-  // Format 2: <eva>8000105</eva> as child element
   const childEvaMatch = xml.match(/<eva[^>]*>(\d+)<\/eva>/i);
   if (childEvaMatch) {
     const childNameMatch = xml.match(/<name[^>]*>([^<]+)<\/name>/i);
     return { eva: childEvaMatch[1], name: childNameMatch ? childNameMatch[1] : query };
   }
 
-  // Format 3: try to find any evaNumber attribute
   const evaNumAttr = xml.match(/evaNumber="(\d+)"/i);
   if (evaNumAttr) {
     const nameAttr = xml.match(/name="([^"]+)"/i) || xml.match(/<name[^>]*>([^<]+)<\/name>/i);
@@ -247,12 +318,24 @@ Deno.serve(async (req: Request) => {
       if (debug) {
         const cid = Deno.env.get("DB_API_CLIENT_ID");
         const cs = Deno.env.get("DB_API_CLIENT_SECRET");
+        const trimmedId = (cid ?? "").trim();
+        const trimmedSecret = (cs ?? "").trim();
+        const idBytes = Array.from(trimmedId).map((c) => c.charCodeAt(0));
+        const secretBytes = Array.from(trimmedSecret).map((c) => c.charCodeAt(0));
+        const hasNonAsciiId = idBytes.some((b) => b > 127);
+        const hasNonAsciiSecret = secretBytes.some((b) => b > 127);
         return new Response(JSON.stringify({
           debug: true,
           clientIdLength: cid?.length ?? 0,
           clientSecretLength: cs?.length ?? 0,
-          clientIdFirst3: cid ? cid.slice(0, 3) : null,
-          clientSecretFirst3: cs ? cs.slice(0, 3) : null,
+          trimmedIdLength: trimmedId.length,
+          trimmedSecretLength: trimmedSecret.length,
+          hasWhitespaceId: cid !== trimmedId,
+          hasWhitespaceSecret: cs !== trimmedSecret,
+          hasNonAsciiId,
+          hasNonAsciiSecret,
+          idCharCodes: idBytes,
+          secretCharCodes: secretBytes,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({
