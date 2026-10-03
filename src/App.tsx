@@ -11,6 +11,7 @@ import { Contacts } from '@/screens/Contacts';
 import { More } from '@/screens/More';
 import { Search } from '@/screens/Search';
 import { TaskEditor } from '@/components/TaskEditor';
+import { getCountryFlag } from '@/lib/countryFlags';
 
 type Tab = 'heute' | 'aufgaben' | 'reisen' | 'kontakte' | 'mehr';
 
@@ -131,6 +132,15 @@ export default function App() {
 
 function CountrySilhouette({ destination }: { destination: string | null }) {
   const label = destination ?? 'Deutschland';
+  const flag = getCountryFlag(destination);
+  if (flag) {
+    return (
+      <div className="flex flex-col items-center opacity-[0.08] dark:opacity-[0.06] select-none">
+        <span className="text-[280px] leading-none">{flag}</span>
+        <p className="text-5xl font-bold text-primary-600 mt-2 tracking-tight">{label}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center opacity-[0.06] dark:opacity-[0.04]">
       <svg viewBox="0 0 200 200" className="w-[80vw] max-w-[500px] h-auto">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search as SearchIcon, Trash2, CheckSquare, X } from 'lucide-react';
+import { Search as SearchIcon, Trash2, CheckSquare, X } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { SwipeableTaskItem } from '@/components/SwipeableTaskItem';
 import { TaskEditor } from '@/components/TaskEditor';
@@ -246,16 +246,6 @@ export function Tasks({ onOpenSearch }: TasksProps) {
             </div>
           ))}
         </div>
-      )}
-
-      {!selectMode && (
-        <button
-          onClick={() => setEditorOpen(true)}
-          className="fixed right-4 bottom-[calc(88px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg flex items-center justify-center active:scale-90 transition-transform z-20"
-          aria-label="Aufgabe hinzufügen"
-        >
-          <Plus size={24} />
-        </button>
       )}
 
       <TaskEditor open={editorOpen} onClose={() => { setEditorOpen(false); setEditingTask(null); }} task={editingTask} />

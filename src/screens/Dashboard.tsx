@@ -10,6 +10,7 @@ import { Task } from '@/types';
 import { sortTasks, isOverdue, isDueToday, formatRelativeDate, formatTime, formatDateShort, computeReminderAt, formatReminderCountdown, todayISO } from '@/lib/dateUtils';
 import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flightApi';
 import { supabase } from '@/lib/supabase';
+import { getCountryFlag } from '@/lib/countryFlags';
 import { getAirportTimezone, getCityTimezone, formatTimeInZone } from '@/lib/timezoneData';
 
 interface DashboardProps {
@@ -208,6 +209,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {/* Trip countdown — main hero card */}
       {nextTrip && (
         <div className="rounded-3xl bg-gradient-to-br from-primary-600 via-sky-600 to-primary-700 p-6 text-white shadow-xl shadow-primary-600/20 overflow-hidden relative">
+          {(() => {
+            const flag = getCountryFlag(nextTrip.trip.destination);
+            return flag ? (
+              <span className="absolute -right-6 -top-6 text-[200px] leading-none opacity-[0.13] select-none pointer-events-none">{flag}</span>
+            ) : null;
+          })()}
           <div className="relative z-10">
             <div className="flex items-center gap-1.5 text-sm text-white/80 mb-2">
               <MapPin size={14} />
