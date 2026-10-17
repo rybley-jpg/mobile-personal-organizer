@@ -273,9 +273,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           {(() => {
             const flag = getCountryFlag(nextTrip.trip.destination);
             return flag ? (
-              <span className="absolute -right-6 -top-6 text-[200px] leading-none opacity-[0.13] select-none pointer-events-none">{flag}</span>
+              <div className="absolute inset-0 flex items-center justify-end overflow-hidden pointer-events-none">
+                <span className="flag-bg text-[220px] leading-none select-none -mr-12 -mt-8 drop-shadow-2xl">{flag}</span>
+              </div>
             ) : null;
           })()}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-700/60 via-primary-600/30 to-transparent pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center gap-1.5 text-sm text-white/80 mb-2">
               <MapPin size={14} />

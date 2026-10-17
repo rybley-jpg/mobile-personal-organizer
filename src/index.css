@@ -61,3 +61,12 @@ select {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes flag-shimmer {
+  0%, 100% { transform: translateX(0) scale(1); opacity: 0.22; }
+  50% { transform: translateX(-8px) scale(1.03); opacity: 0.30; }
+}
+
+.flag-bg {
+  animation: flag-shimmer 6s ease-in-out infinite;
+}
