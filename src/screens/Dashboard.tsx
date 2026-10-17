@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train, Cloud, CloudRain, Sun, CloudSun, CloudSnow, Wind, Droplets, Sunrise, Sunset } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, ChevronRight, ChevronDown, ChevronUp, RefreshCw, MapPin, Globe, Navigation, Train, Cloud, CloudRain, Sun, CloudSun, CloudSnow, Sunrise, Sunset } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { FlightStatusBadge } from '@/components/FlightStatusBadge';
@@ -68,19 +68,6 @@ function weatherIcon(code: number): typeof Sun {
   return Cloud;
 }
 
-function weatherLabel(code: number): string {
-  if (code === 0) return 'Klar';
-  if (code <= 3) return 'Heiter';
-  if (code <= 48) return 'Nebel';
-  if (code <= 57) return 'Regen';
-  if (code <= 67) return 'Regen';
-  if (code <= 77) return 'Schnee';
-  if (code <= 82) return 'Regenschauer';
-  if (code <= 86) return 'Schneeschauer';
-  if (code <= 99) return 'Gewitter';
-  return 'Bewölkt';
-}
-
 interface DashboardProps {
   onNavigate: (tab: string) => void;
 }
@@ -116,7 +103,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [clockColorsOpen, setClockColorsOpen] = useState(false);
   const [homeWeather, setHomeWeather] = useState<WeatherData | null>(null);
   const [destWeather, setDestWeather] = useState<WeatherData | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -195,7 +181,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, [nextTrip]);
 
   const fetchWeatherData = useCallback(async () => {
-    setWeatherLoading(true);
     try {
       const homeCoords = await geocodeCity('Nürnberg, Deutschland');
       if (homeCoords) {
@@ -215,8 +200,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       }
     } catch {
       // silent
-    } finally {
-      setWeatherLoading(false);
     }
   }, [nextTrip?.trip.destination]);
 
@@ -489,11 +472,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} sunrise={homeWeather?.sunrise ?? null} sunset={homeWeather?.sunset ?? null} />
+          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} sunrise={homeWeather?.sunrise ?? null} sunset={homeWeather?.sunset ?? null} weather={homeWeather} />
           {destinationTimezone ? (
-            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight sunrise={destWeather?.sunrise ?? null} sunset={destWeather?.sunset ?? null} />
+            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight sunrise={destWeather?.sunrise ?? null} sunset={destWeather?.sunset ?? null} weather={destWeather} />
           ) : (
-            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={destClockColor} sunrise={null} sunset={null} />
+            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={destClockColor} sunrise={null} sunset={null} weather={null} />
           )}
         </div>
         {/* Collapsible color picker */}
@@ -520,38 +503,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         )}
       </div>
 
-      {/* Weather cards */}
-      <div>
-        <div className="flex items-center gap-2 mb-2.5">
-          <Cloud size={16} className="text-sky-500" />
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Wetter</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <WeatherCard
-            label="Nürnberg"
-            subLabel="Heimat"
-            weather={homeWeather}
-            loading={weatherLoading}
-          />
-          {nextTrip?.trip.destination ? (
-            <WeatherCard
-              label={nextTrip.trip.destination}
-              subLabel="Reiseziel"
-              weather={destWeather}
-              loading={weatherLoading}
-            />
-          ) : (
-            <WeatherCard
-              label="Reiseziel"
-              subLabel="noch offen"
-              weather={null}
-              loading={false}
-              dimmed
-            />
-          )}
-        </div>
-      </div>
-
       {flightDetailSegment && (
         <FlightDetail
           segment={flightDetailSegment}
@@ -560,51 +511,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           tripName={tripsApi.trips.find((t) => t.id === flightDetailSegment.trip_id)?.name}
         />
       )}
-    </div>
-  );
-}
-
-function WeatherCard({ label, subLabel, weather, loading, dimmed }: {
-  label: string;
-  subLabel: string;
-  weather: WeatherData | null;
-  loading: boolean;
-  dimmed?: boolean;
-}) {
-  if (loading && !weather) {
-    return (
-      <div className={`rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px] ${dimmed ? 'opacity-50' : ''}`}>
-        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2">{label}</p>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
-      </div>
-    );
-  }
-
-  if (!weather) {
-    return (
-      <div className={`rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px] ${dimmed ? 'opacity-50' : ''}`}>
-        <Cloud size={28} className="text-slate-300 dark:text-slate-600" />
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2">{label}</p>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Nicht verfügbar</p>
-      </div>
-    );
-  }
-
-  const Icon = weatherIcon(weather.weatherCode);
-
-  return (
-    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px]">
-      <Icon size={28} className="text-sky-500" />
-      <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1.5">{weather.temperature}°C</p>
-      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</p>
-      <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
-      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-        <span className="flex items-center gap-0.5"><Droplets size={10} /> {weather.humidity}%</span>
-        <span className="flex items-center gap-0.5"><Wind size={10} /> {weather.windSpeed} km/h</span>
-      </div>
-      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{weatherLabel(weather.weatherCode)}</p>
     </div>
   );
 }
@@ -622,7 +528,7 @@ function formatSunTime(iso: string | null, tz: string): string | null {
   }
 }
 
-function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentColor, sunrise, sunset }: {
+function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentColor, sunrise, sunset, weather }: {
   label: string;
   subLabel: string;
   tz: string;
@@ -633,10 +539,12 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
   accentColor: string;
   sunrise: string | null;
   sunset: string | null;
+  weather: WeatherData | null;
 }) {
   const { time, date, offset } = formatTimeInZone(tz);
   const sunriseStr = formatSunTime(sunrise, tz);
   const sunsetStr = formatSunTime(sunset, tz);
+  const WeatherIcon = weather ? weatherIcon(weather.weatherCode) : null;
 
   if (style === 'analog') {
     return (
@@ -651,6 +559,12 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
         <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 mt-1 truncate max-w-[80%] text-center leading-tight">{label}</p>
         <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight">{subLabel}</p>
         <p className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums font-mono leading-tight">{date}</p>
+        {weather && WeatherIcon && (
+          <div className="flex items-center gap-1 mt-0.5 text-[9px] text-slate-600 dark:text-slate-300">
+            <WeatherIcon size={10} className="text-sky-500" />
+            <span className="font-semibold">{weather.temperature}°C</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -667,7 +581,13 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
       <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
       <p className="text-xl font-bold tabular-nums font-mono tracking-wider mt-1">{time}</p>
       <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
-      <div className={`flex flex-col items-center gap-0.5 mt-1 text-[9px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
+      {weather && WeatherIcon && (
+        <div className={`flex items-center gap-1 mt-0.5 text-[9px] ${highlight ? 'text-white/90' : 'text-slate-300'}`}>
+          <WeatherIcon size={10} />
+          <span className="font-semibold">{weather.temperature}°C</span>
+        </div>
+      )}
+      <div className={`flex flex-col items-center gap-0.5 mt-0.5 text-[9px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
         {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={9} /> {sunriseStr}</span>}
         {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={9} /> {sunsetStr}</span>}
       </div>
