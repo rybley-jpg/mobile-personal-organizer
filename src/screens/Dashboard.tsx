@@ -471,7 +471,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} sunrise={homeWeather?.sunrise ?? null} sunset={homeWeather?.sunset ?? null} weather={homeWeather} />
           {destinationTimezone ? (
             <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight sunrise={destWeather?.sunrise ?? null} sunset={destWeather?.sunset ?? null} weather={destWeather} />
@@ -548,54 +548,58 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
 
   if (style === 'analog') {
     return (
-      <div className={`rounded-full aspect-square border flex flex-col items-center justify-center overflow-hidden ${
-        highlight
-          ? 'border-2'
-          : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
+      <div className={`relative rounded-full aspect-square overflow-hidden ${
+        highlight ? 'border-2' : 'border border-slate-100 dark:border-slate-800'
       } ${dimmed ? 'opacity-50' : ''}`}
-      style={highlight ? { borderColor: accentColor, backgroundColor: `${accentColor}15` } : undefined}
+      style={highlight ? { borderColor: accentColor, backgroundColor: `${accentColor}10` } : undefined}
       >
-        <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} sunrise={sunrise} sunset={sunset} />
-        <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 mt-1 truncate max-w-[80%] text-center leading-tight">{label}</p>
-        <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight">{subLabel}</p>
-        <p className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums font-mono leading-tight">{date}</p>
-        {weather && WeatherIcon && (
-          <div className="flex items-center gap-1 mt-0.5 text-[9px] text-slate-600 dark:text-slate-300">
-            <WeatherIcon size={10} className="text-sky-500" />
-            <span className="font-semibold">{weather.temperature}°C</span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} sunrise={sunrise} sunset={sunset} weather={weather} />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-2 pt-6 bg-gradient-to-t from-white/95 dark:from-slate-900/95 via-white/70 dark:via-slate-900/70 to-transparent">
+          <p className="text-[10px] font-bold text-slate-800 dark:text-slate-100 truncate max-w-[70%] text-center leading-tight">{label}</p>
+          {weather && WeatherIcon && (
+            <div className="flex items-center gap-0.5 mt-0.5">
+              <WeatherIcon size={11} className="text-sky-500" />
+              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{weather.temperature}°</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 mt-0.5 text-[8px] text-slate-500 dark:text-slate-400">
+            {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={8} className="text-amber-500" />{sunriseStr}</span>}
+            {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={8} className="text-orange-500" />{sunsetStr}</span>}
           </div>
-        )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`rounded-full aspect-square border flex flex-col items-center justify-center overflow-hidden p-2 ${
+    <div className={`relative rounded-full aspect-square overflow-hidden flex flex-col items-center justify-center p-3 ${
       highlight
-        ? 'border-transparent text-white'
-        : 'bg-slate-900 dark:bg-slate-800 border-slate-700 text-white'
+        ? 'text-white'
+        : 'bg-slate-900 dark:bg-slate-800 border border-slate-700 text-white'
     } ${dimmed ? 'opacity-50' : ''}`}
-    style={highlight ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)` } : undefined}
+    style={highlight ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)` } : undefined}
     >
-      <p className="text-[11px] font-semibold truncate max-w-[80%] text-center leading-tight">{label}</p>
-      <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
-      <p className="text-xl font-bold tabular-nums font-mono tracking-wider mt-1">{time}</p>
-      <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
+      <p className="text-[11px] font-bold truncate max-w-[75%] text-center leading-tight">{label}</p>
+      <p className={`text-[8px] leading-tight ${highlight ? 'text-white/60' : 'text-slate-400'}`}>{subLabel}</p>
+      <p className="text-2xl font-bold tabular-nums font-mono tracking-wider mt-1.5">{time}</p>
+      <p className={`text-[8px] leading-tight mt-0.5 ${highlight ? 'text-white/60' : 'text-slate-400'}`}>{date}</p>
       {weather && WeatherIcon && (
-        <div className={`flex items-center gap-1 mt-0.5 text-[9px] ${highlight ? 'text-white/90' : 'text-slate-300'}`}>
-          <WeatherIcon size={10} />
-          <span className="font-semibold">{weather.temperature}°C</span>
+        <div className={`flex items-center gap-1 mt-1 ${highlight ? 'text-white' : 'text-slate-200'}`}>
+          <WeatherIcon size={14} />
+          <span className="text-sm font-bold">{weather.temperature}°C</span>
         </div>
       )}
-      <div className={`flex flex-col items-center gap-0.5 mt-0.5 text-[9px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
-        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={9} /> {sunriseStr}</span>}
-        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={9} /> {sunsetStr}</span>}
+      <div className={`flex items-center gap-2 mt-1 text-[8px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
+        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={8} className="text-amber-300" />{sunriseStr}</span>}
+        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={8} className="text-orange-300" />{sunsetStr}</span>}
       </div>
     </div>
   );
 }
 
-function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz: string; now: number; highlight?: boolean; accentColor: string; sunrise: string | null; sunset: string | null }) {
+function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset, weather }: { tz: string; now: number; highlight?: boolean; accentColor: string; sunrise: string | null; sunset: string | null; weather: WeatherData | null }) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
@@ -635,9 +639,10 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz:
   const sunsetPos = sunPos(sunset);
 
   return (
-    <svg viewBox="0 0 100 100" className="w-20 h-20">
+    <svg viewBox="0 0 100 100" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
       {/* Face */}
-      <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? accentColor : '#334155'} strokeWidth="2" />
+      <circle cx="50" cy="50" r="49" fill={highlight ? `${accentColor}08` : '#1e293b'} stroke={highlight ? accentColor : '#334155'} strokeWidth="1" />
+      <circle cx="50" cy="50" r="44" fill="none" stroke={highlight ? `${accentColor}20` : '#334155'} strokeWidth="0.5" />
       {/* Day arc between sunrise and sunset */}
       {sunrisePos && sunsetPos && (
         <path
@@ -652,13 +657,13 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz:
       {/* Sunrise marker */}
       {sunrisePos && (
         <g>
-          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="3" fill="#f59e0b" />
+          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="2.5" fill="#f59e0b" />
         </g>
       )}
       {/* Sunset marker */}
       {sunsetPos && (
         <g>
-          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="3" fill="#f97316" />
+          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="2.5" fill="#f97316" />
         </g>
       )}
       {/* Hour markers */}
@@ -668,8 +673,14 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz:
         const y1 = 50 + 38 * Math.sin(angle);
         const x2 = 50 + 42 * Math.cos(angle);
         const y2 = 50 + 42 * Math.sin(angle);
-        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={highlight ? '#475569' : '#64748b'} strokeWidth="1.5" strokeLinecap="round" />;
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={highlight ? '#475569' : '#64748b'} strokeWidth="1.2" strokeLinecap="round" />;
       })}
+      {/* Weather temperature in upper clock face */}
+      {weather && (
+        <text x="50" y="26" textAnchor="middle" fontSize="7" fontWeight="bold" fill={highlight ? accentColor : '#94a3b8'} fontFamily="monospace">
+          {weather.temperature}°
+        </text>
+      )}
       {/* Hour hand */}
       <line
         x1="50" y1="50"
@@ -692,7 +703,7 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz:
         stroke={accentColor} strokeWidth="1" strokeLinecap="round"
       />
       {/* Center dot */}
-      <circle cx="50" cy="50" r="3" fill={accentColor} />
+      <circle cx="50" cy="50" r="2.5" fill={accentColor} />
     </svg>
   );
 }
