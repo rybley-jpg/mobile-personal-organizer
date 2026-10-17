@@ -2,7 +2,7 @@ export type Priority = 'niedrig' | 'normal' | 'hoch';
 export type TaskStatus = 'offen' | 'erledigt';
 export type RepeatRule = 'taeglich' | 'woechentlich' | 'monatlich' | 'jaehrlich';
 export type ReminderOffset = 'none' | 'at_time' | '15m' | '1h' | '2h' | '1d' | '3d' | '7d';
-export type SegmentType = 'flug' | 'hotel' | 'mietwagen' | 'bahn' | 'sonstiges';
+export type SegmentType = 'flug' | 'hotel' | 'mietwagen' | 'bahn';
 export type FlightStatus = 'scheduled' | 'delayed' | 'boarding' | 'departed' | 'arrived' | 'cancelled' | 'diverted';
 export type TrainStatus = 'on_time' | 'delayed' | 'cancelled' | 'unknown';
 export type TravelClass = 'Economy' | 'Premium Economy' | 'Business' | 'First';
@@ -201,7 +201,6 @@ export const SEGMENT_TYPE_LABELS: Record<SegmentType, string> = {
   hotel: 'Hotel',
   mietwagen: 'Mietwagen',
   bahn: 'Bahn',
-  sonstiges: 'Sonstiges',
 };
 
 export const FLIGHT_STATUS_LABELS: Record<FlightStatus, string> = {

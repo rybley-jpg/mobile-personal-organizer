@@ -242,7 +242,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
       <div className="space-y-4">
         {/* Segment type */}
         <Field label="Typ">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {(Object.keys(SEGMENT_TYPE_LABELS) as SegmentType[]).map((t) => (
               <button
                 key={t}

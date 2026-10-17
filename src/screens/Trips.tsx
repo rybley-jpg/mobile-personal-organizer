@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Plus, Plane, Hotel, Car, Package, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Plus, Plane, Hotel, Car, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Trip, TripSegment, SegmentType } from '@/types';
 import { SEGMENT_TYPE_LABELS } from '@/types';
@@ -20,7 +20,6 @@ const SEGMENT_ICON: Record<SegmentType, typeof Plane> = {
   hotel: Hotel,
   mietwagen: Car,
   bahn: Train,
-  sonstiges: Package,
 };
 
 export function Trips() {
