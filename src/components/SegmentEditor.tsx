@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
-import { Sheet } from '@/components/ui/Sheet';
+import { useEffect, useState, useCallback } from 'react';
+import { Trash2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { TripSegment, SegmentType, TravelClass, TRAVEL_CLASS_LABELS, SEGMENT_TYPE_LABELS } from '@/types';
 import { AirlineSelector } from '@/components/AirlineSelector';
@@ -82,6 +81,18 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   const [draft, setDraft] = useState<SegmentDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleBack = useCallback(() => {
+    window.history.back();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    window.history.pushState({ segEditor: true }, '');
+    const handlePop = () => onClose();
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,38 +208,32 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   const isFlight = draft.segment_type === 'flug';
   const isTrain = draft.segment_type === 'bahn';
 
+  if (!open) return null;
+
   return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title={segment ? 'Etappe bearbeiten' : 'Etappe hinzufügen'}
-      footer={
-        <div className="flex gap-2">
+    <div className="fixed inset-0 z-[60] bg-slate-50 dark:bg-slate-950 overflow-y-auto pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))]">
+      <div className="w-full md:max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4">
+        <div className="flex items-center gap-3 mb-4">
           <button
-            onClick={onClose}
-            className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            onClick={handleBack}
+            className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform shrink-0"
+            aria-label="Zurück"
           >
-            Abbrechen
+            <ArrowLeft size={20} />
           </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white truncate flex-1">{segment ? 'Etappe bearbeiten' : 'Etappe hinzufügen'}</h1>
           {segment && (
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="h-11 px-4 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors flex items-center gap-1.5"
+              className="h-10 w-10 rounded-full border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 flex items-center justify-center active:scale-95 transition-transform shrink-0 disabled:opacity-50"
+              aria-label="Löschen"
             >
-              <Trash2 size={16} />
+              <Trash2 size={18} />
             </button>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 h-11 rounded-xl bg-primary-600 text-white font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Speichert…' : 'Speichern'}
-          </button>
         </div>
-      }
-    >
+
       <div className="space-y-4">
         {/* Segment type */}
         <Field label="Typ">
@@ -556,7 +561,24 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
-    </Sheet>
+
+      <div className="flex gap-2 mt-4 mb-4">
+        <button
+          onClick={handleBack}
+          className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        >
+          Abbrechen
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 h-11 rounded-xl bg-primary-600 text-white font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Speichert…' : 'Speichern'}
+        </button>
+      </div>
+      </div>
+    </div>
   );
 }
 
