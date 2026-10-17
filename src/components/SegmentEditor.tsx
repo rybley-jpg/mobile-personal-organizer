@@ -249,38 +249,6 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
           </div>
         </Field>
 
-        <Field label="Bezeichnung">
-          <input
-            type="text"
-            value={draft.title}
-            onChange={(e) => update('title', e.target.value)}
-            placeholder={isFlight ? 'z. B. Flug nach Windhoek' : 'z. B. Hotel Übernachtung'}
-            className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
-          />
-        </Field>
-
-        {/* Locations */}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Von / Startort">
-            <input
-              type="text"
-              value={draft.from_location}
-              onChange={(e) => update('from_location', e.target.value)}
-              placeholder="z. B. Frankfurt"
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
-            />
-          </Field>
-          <Field label="Nach / Zielort">
-            <input
-              type="text"
-              value={draft.to_location}
-              onChange={(e) => update('to_location', e.target.value)}
-              placeholder="z. B. Windhoek"
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
-            />
-          </Field>
-        </div>
-
         {/* Airport codes (flight only) */}
         {isFlight && (
           <div className="grid grid-cols-2 gap-3">

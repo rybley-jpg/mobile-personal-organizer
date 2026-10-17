@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, Plane, Hotel, Car, Package, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Plus, Plane, Hotel, Car, Package, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Trip, TripSegment, SegmentType } from '@/types';
 import { SEGMENT_TYPE_LABELS } from '@/types';
@@ -119,6 +119,21 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
   const [editingSeg, setEditingSeg] = useState<TripSegment | null>(null);
   const [editTripOpen, setEditTripOpen] = useState(false);
 
+  const handleClose = useCallback(() => {
+    window.history.back();
+  }, []);
+
+  useEffect(() => {
+    window.history.pushState({ tripDetail: true }, '');
+    const handlePop = () => {
+      onClose();
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => {
+      window.removeEventListener('popstate', handlePop);
+    };
+  }, [onClose]);
+
   // Chronological sorting by departure date+time
   const sortedSegs = useMemo(() => {
     return [...tripSegs].sort((a, b) => {
@@ -144,21 +159,32 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
 
   return (
     <>
-    <Sheet open={!!trip && !flightDetailSeg && !trainDetailSeg && !segEditorOpen && !editTripOpen} onClose={onClose} title={trip.name}>
-      <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          {trip.destination && (
-            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-              <MapPin size={15} /> {trip.destination}
-            </div>
-          )}
+    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 overflow-y-auto pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))]">
+      <div className="w-full md:max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={handleClose}
+            className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform shrink-0"
+            aria-label="Zurück"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white truncate flex-1">{trip.name}</h1>
           <button
             onClick={() => setEditTripOpen(true)}
-            className="ml-auto h-8 px-3 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 active:scale-95 transition-transform"
+            className="h-10 px-3 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 active:scale-95 transition-transform shrink-0"
           >
             <Pencil size={13} /> Bearbeiten
           </button>
         </div>
+
+      <div className="space-y-5">
+
+        {trip.destination && (
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <MapPin size={15} /> {trip.destination}
+          </div>
+        )}
 
         {/* Overall trip status banner */}
         {sortedSegs.length > 0 && (
@@ -429,7 +455,8 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
       </div>
 
       <SuggestedRemindersSheet open={suggestSheet} onClose={() => setSuggestSheet(false)} trip={trip} segments={tripSegs} />
-    </Sheet>
+      </div>
+    </div>
 
     {segEditorOpen && (
       <SegmentEditor
