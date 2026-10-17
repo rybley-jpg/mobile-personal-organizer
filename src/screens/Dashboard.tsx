@@ -640,7 +640,7 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
 
   if (style === 'analog') {
     return (
-      <div className={`rounded-3xl border p-4 flex flex-col items-center ${
+      <div className={`rounded-full aspect-square border flex flex-col items-center justify-center overflow-hidden ${
         highlight
           ? 'border-2'
           : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
@@ -648,28 +648,28 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
       style={highlight ? { borderColor: accentColor, backgroundColor: `${accentColor}15` } : undefined}
       >
         <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} sunrise={sunrise} sunset={sunset} />
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2 truncate w-full text-center">{label}</p>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums font-mono">{date}</p>
+        <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 mt-1 truncate max-w-[80%] text-center leading-tight">{label}</p>
+        <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight">{subLabel}</p>
+        <p className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums font-mono leading-tight">{date}</p>
       </div>
     );
   }
 
   return (
-    <div className={`rounded-3xl border p-4 flex flex-col items-center justify-center min-h-[140px] ${
+    <div className={`rounded-full aspect-square border flex flex-col items-center justify-center overflow-hidden p-2 ${
       highlight
         ? 'border-transparent text-white'
         : 'bg-slate-900 dark:bg-slate-800 border-slate-700 text-white'
     } ${dimmed ? 'opacity-50' : ''}`}
     style={highlight ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)` } : undefined}
     >
-      <p className="text-sm font-medium truncate w-full text-center mb-1">{label}</p>
-      <p className={`text-[10px] mb-1 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
-      <p className="text-2xl font-bold tabular-nums font-mono tracking-wider">{time}</p>
-      <p className={`text-[10px] mt-0.5 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
-      <div className={`flex items-center gap-2 mt-1.5 text-[10px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
-        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={10} /> {sunriseStr}</span>}
-        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={10} /> {sunsetStr}</span>}
+      <p className="text-[11px] font-semibold truncate max-w-[80%] text-center leading-tight">{label}</p>
+      <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
+      <p className="text-xl font-bold tabular-nums font-mono tracking-wider mt-1">{time}</p>
+      <p className={`text-[9px] leading-tight ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
+      <div className={`flex flex-col items-center gap-0.5 mt-1 text-[9px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
+        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={9} /> {sunriseStr}</span>}
+        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={9} /> {sunsetStr}</span>}
       </div>
     </div>
   );
@@ -715,7 +715,7 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz:
   const sunsetPos = sunPos(sunset);
 
   return (
-    <svg viewBox="0 0 100 100" className="w-24 h-24">
+    <svg viewBox="0 0 100 100" className="w-20 h-20">
       {/* Face */}
       <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? accentColor : '#334155'} strokeWidth="2" />
       {/* Day arc between sunrise and sunset */}
