@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Trash2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { TripSegment, SegmentType, TravelClass, TRAVEL_CLASS_LABELS, SEGMENT_TYPE_LABELS } from '@/types';
@@ -81,13 +81,17 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   const [draft, setDraft] = useState<SegmentDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initializedRef = useRef(false);
 
   const handleBack = useCallback(() => {
     window.history.back();
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedRef.current = false;
+      return;
+    }
     window.history.pushState({ segEditor: true }, '');
     const handlePop = () => onClose();
     window.addEventListener('popstate', handlePop);
@@ -95,7 +99,8 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || initializedRef.current) return;
+    initializedRef.current = true;
     setError(null);
     if (segment) {
       setDraft({
