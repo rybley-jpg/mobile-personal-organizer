@@ -630,7 +630,11 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset, weather
       const sm = parseInt(sunParts.find((p) => p.type === 'minute')?.value ?? '0', 10);
       const angleDeg = ((sh + sm / 60) / 24) * 360;
       const rad = (angleDeg - 90) * (Math.PI / 180);
-      return { x: 50 + 44 * Math.cos(rad), y: 50 + 44 * Math.sin(rad) };
+      const pos = { x: 50 + 44 * Math.cos(rad), y: 50 + 44 * Math.sin(rad), rad, minutes: sm };
+      // Offset text outward from the marker
+      const tx = 50 + 50 * Math.cos(rad);
+      const ty = 50 + 50 * Math.sin(rad);
+      return { ...pos, tx, ty };
     } catch {
       return null;
     }
@@ -654,16 +658,22 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset, weather
           opacity="0.35"
         />
       )}
-      {/* Sunrise marker */}
+      {/* Sunrise marker with minutes */}
       {sunrisePos && (
         <g>
-          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="2.5" fill="#f59e0b" />
+          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="3" fill="#f59e0b" />
+          <text x={sunrisePos.tx} y={sunrisePos.ty + 2} textAnchor="middle" fontSize="5" fontWeight="bold" fill="#f59e0b" fontFamily="monospace">
+            {String(sunrisePos.minutes).padStart(2, '0')}
+          </text>
         </g>
       )}
-      {/* Sunset marker */}
+      {/* Sunset marker with minutes */}
       {sunsetPos && (
         <g>
-          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="2.5" fill="#f97316" />
+          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="3" fill="#f97316" />
+          <text x={sunsetPos.tx} y={sunsetPos.ty + 2} textAnchor="middle" fontSize="5" fontWeight="bold" fill="#f97316" fontFamily="monospace">
+            {String(sunsetPos.minutes).padStart(2, '0')}
+          </text>
         </g>
       )}
       {/* Hour markers */}
