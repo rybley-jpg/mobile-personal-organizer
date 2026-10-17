@@ -63,10 +63,10 @@ select {
 }
 
 @keyframes flag-shimmer {
-  0%, 100% { transform: translateX(0) scale(1) rotate(-2deg); opacity: 0.40; }
-  50% { transform: translateX(-6px) scale(1.04) rotate(-1deg); opacity: 0.55; }
+  0%, 100% { transform: scale(1.05) translateX(0); opacity: 0.55; }
+  50% { transform: scale(1.10) translateX(-8px); opacity: 0.70; }
 }
 
 .flag-bg {
-  animation: flag-shimmer 7s ease-in-out infinite;
+  animation: flag-shimmer 8s ease-in-out infinite;
 }

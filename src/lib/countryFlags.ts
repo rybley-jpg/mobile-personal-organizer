@@ -154,29 +154,33 @@ function isoToFlagEmoji(iso: string): string {
   return String.fromCodePoint(...chars);
 }
 
-export function getCountryFlag(destination: string | null | undefined): string {
+export function getCountryISO(destination: string | null | undefined): string {
   if (!destination) return '';
   const normalized = destination.trim().toLowerCase();
 
   const direct = COUNTRY_TO_ISO[normalized];
-  if (direct) return isoToFlagEmoji(direct);
+  if (direct) return direct;
 
   for (const [key, iso] of Object.entries(COUNTRY_TO_ISO)) {
     if (normalized.includes(key) || key.includes(normalized)) {
-      return isoToFlagEmoji(iso);
+      return iso;
     }
   }
 
   const parts = normalized.split(/[\s,/-]+/).filter(Boolean);
   for (const part of parts) {
     const match = COUNTRY_TO_ISO[part];
-    if (match) return isoToFlagEmoji(match);
+    if (match) return match;
   }
 
   if (parts.length >= 1 && parts[0].length === 2) {
-    const flag = isoToFlagEmoji(parts[0]);
-    if (flag) return flag;
+    return parts[0].toUpperCase();
   }
 
   return '';
+}
+
+export function getCountryFlag(destination: string | null | undefined): string {
+  const iso = getCountryISO(destination);
+  return iso ? isoToFlagEmoji(iso) : '';
 }

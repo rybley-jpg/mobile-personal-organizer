@@ -7,7 +7,7 @@ import { FlightDetail } from '@/components/FlightDetail';
 import { formatRelativeDate, formatTime, formatDateShort, todayISO } from '@/lib/dateUtils';
 import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flightApi';
 import { supabase } from '@/lib/supabase';
-import { getCountryFlag } from '@/lib/countryFlags';
+import { getCountryISO } from '@/lib/countryFlags';
 import { getAirportTimezone, getCityTimezone, formatTimeInZone } from '@/lib/timezoneData';
 
 interface WeatherData {
@@ -271,16 +271,22 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       {nextTrip && (
         <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl shadow-primary-600/20 overflow-hidden relative">
           {(() => {
-            const flag = getCountryFlag(nextTrip.trip.destination);
-            return flag ? (
-              <div className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
-                <span className="flag-bg text-[280px] leading-none select-none drop-shadow-2xl">{flag}</span>
-              </div>
+            const iso = getCountryISO(nextTrip.trip.destination);
+            const flagUrl = iso ? `https://flagcdn.com/${iso.toLowerCase()}.svg` : '';
+            return flagUrl ? (
+              <>
+                <img
+                  src={flagUrl}
+                  alt={nextTrip.trip.destination ?? ''}
+                  className="flag-bg absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  style={{ objectPosition: 'center' }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/60 to-slate-900/10 pointer-events-none" />
+              </>
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-sky-600 to-primary-700 pointer-events-none" />
             );
           })()}
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/50 to-slate-900/20 pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center gap-1.5 text-sm text-white/80 mb-2">
               <MapPin size={14} />
