@@ -269,16 +269,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* Trip countdown — main hero card */}
       {nextTrip && (
-        <div className="rounded-3xl bg-gradient-to-br from-primary-600 via-sky-600 to-primary-700 p-6 text-white shadow-xl shadow-primary-600/20 overflow-hidden relative">
+        <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl shadow-primary-600/20 overflow-hidden relative">
           {(() => {
             const flag = getCountryFlag(nextTrip.trip.destination);
             return flag ? (
-              <div className="absolute inset-0 flex items-center justify-end overflow-hidden pointer-events-none">
-                <span className="flag-bg text-[220px] leading-none select-none -mr-12 -mt-8 drop-shadow-2xl">{flag}</span>
+              <div className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
+                <span className="flag-bg text-[280px] leading-none select-none drop-shadow-2xl">{flag}</span>
               </div>
-            ) : null;
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-sky-600 to-primary-700 pointer-events-none" />
+            );
           })()}
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-700/60 via-primary-600/30 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/50 to-slate-900/20 pointer-events-none" />
           <div className="relative z-10">
             <div className="flex items-center gap-1.5 text-sm text-white/80 mb-2">
               <MapPin size={14} />
