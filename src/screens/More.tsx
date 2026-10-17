@@ -1,21 +1,30 @@
 import { useState } from 'react';
-import { Moon, Sun, Plus, Tag, Trash2, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin } from 'lucide-react';
+import { Moon, Sun, Plus, Tag, Trash2, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin, CheckSquare, Backpack, Phone, AlertTriangle, Users } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { CategoryIcon } from '@/components/CategoryIcon';
 import { Sheet } from '@/components/ui/Sheet';
 import { CurrencyConverter } from '@/screens/CurrencyConverter';
+import { Packlist } from '@/screens/Packlist';
+import { EmergencyInfoScreen } from '@/screens/EmergencyInfo';
 
 const ICON_OPTIONS = ['tag', 'home', 'briefcase', 'heart', 'plane', 'phone', 'wallet', 'calendar', 'shopping-cart', 'alert-triangle'];
 const COLOR_OPTIONS = ['#64748b', '#2563eb', '#ec4899', '#0ea5e9', '#f59e0b', '#10b981', '#06b6d4', '#f97316', '#ef4444', '#8b5cf6'];
 
-export function More() {
+interface MoreProps {
+  onNavigate: (tab: string) => void;
+  onOpenSearch: () => void;
+}
+
+export function More({ onNavigate, onOpenSearch }: MoreProps) {
   const { theme, toggleTheme, accentId, setAccentId, accentPresets, bgEnabled, setBgEnabled } = useTheme();
   const { categoriesApi } = useOrganizer();
   const { user, signOut, updateName } = useAuth();
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [packlistOpen, setPacklistOpen] = useState(false);
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -42,6 +51,18 @@ export function More() {
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Mehr</h1>
 
       <div className="space-y-5">
+        {/* Reise-Funktionen */}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Reise-Funktionen</h2>
+          <div className="space-y-2">
+            <NavRow icon={<CheckSquare size={18} />} title="Aufgaben" subtitle="Checklisten & Erinnerungen" onClick={() => onNavigate('aufgaben')} />
+            <NavRow icon={<Backpack size={18} />} title="Packlisten" subtitle="Alles für die Reise eingepackt" onClick={() => setPacklistOpen(true)} />
+            <NavRow icon={<Users size={18} />} title="Kontakte" subtitle="Reisekontakte & Adressen" onClick={() => onNavigate('kontakte')} />
+            <NavRow icon={<AlertTriangle size={18} />} title="Notfallinformationen" subtitle="Notfallkontakte & medizinische Infos" onClick={() => setEmergencyOpen(true)} />
+            <NavRow icon={<Calculator size={18} />} title="Währungsrechner" subtitle="Aktuelle Wechselkurse" onClick={() => setCurrencyOpen(true)} />
+          </div>
+        </section>
+
         {/* Account */}
         <section>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Konto</h2>
@@ -120,7 +141,6 @@ export function More() {
             <span className="text-xs text-slate-400">{theme === 'dark' ? 'Aktiv' : 'Aktiv'}</span>
           </button>
 
-          {/* Accent color picker */}
           <div className="mt-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Palette size={16} className="text-slate-400" />
@@ -151,7 +171,6 @@ export function More() {
             </p>
           </div>
 
-          {/* Background watermark toggle */}
           <button
             onClick={() => setBgEnabled(!bgEnabled)}
             className="mt-3 w-full flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4"
@@ -197,23 +216,6 @@ export function More() {
           </div>
         </section>
 
-        {/* Tools */}
-        <section>
-          <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Werkzeuge</h2>
-          <button
-            onClick={() => setCurrencyOpen(true)}
-            className="w-full flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4"
-          >
-            <span className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 flex items-center justify-center">
-              <Calculator size={18} />
-            </span>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-slate-900 dark:text-white">Währungsrechner</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Aktuelle Wechselkurse</p>
-            </div>
-          </button>
-        </section>
-
         {/* Info */}
         <section>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Über die App</h2>
@@ -225,12 +227,31 @@ export function More() {
           </div>
         </section>
 
-        <p className="text-center text-xs text-slate-400 dark:text-slate-600 pt-4">Klarly · Persönlicher Organizer</p>
+        <p className="text-center text-xs text-slate-400 dark:text-slate-600 pt-4">Klarly · Persönlicher Reisebegleiter</p>
       </div>
 
       <AddCategorySheet open={addCatOpen} onClose={() => setAddCatOpen(false)} />
       {currencyOpen && <CurrencyConverter onClose={() => setCurrencyOpen(false)} />}
+      {packlistOpen && <Packlist onClose={() => setPacklistOpen(false)} />}
+      {emergencyOpen && <EmergencyInfoScreen onClose={() => setEmergencyOpen(false)} />}
     </div>
+  );
+}
+
+function NavRow({ icon, title, subtitle, onClick }: { icon: React.ReactNode; title: string; subtitle: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 active:scale-[0.98] transition-transform"
+    >
+      <span className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <div className="flex-1 text-left">
+        <p className="text-sm font-medium text-slate-900 dark:text-white">{title}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
+    </button>
   );
 }
 
@@ -298,6 +319,7 @@ function AddCategorySheet({ open, onClose }: { open: boolean; onClose: () => voi
                 onClick={() => setColor(c)}
                 className={`w-9 h-9 rounded-full transition-transform ${color === c ? 'ring-2 ring-offset-2 dark:ring-offset-slate-900 scale-110' : ''}`}
                 style={{ backgroundColor: c, boxShadow: color === c ? `0 0 0 2px ${c}` : undefined }}
+                aria-label={c}
               />
             ))}
           </div>
@@ -310,9 +332,10 @@ function AddCategorySheet({ open, onClose }: { open: boolean; onClose: () => voi
               <button
                 key={ic}
                 onClick={() => setIcon(ic)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${icon === ic ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}
+                className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors ${icon === ic ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                aria-label={ic}
               >
-                <CategoryIcon icon={ic} color={icon === ic ? '#ffffff' : color} size={16} />
+                <CategoryIcon icon={ic} color={icon === ic ? '#2563eb' : '#64748b'} size={16} />
               </button>
             ))}
           </div>

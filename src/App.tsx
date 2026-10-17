@@ -1,25 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Home, CheckSquare, Plane, Users, LayoutGrid, Plus } from 'lucide-react';
+import { Home, Plane, Wallet, LayoutGrid, Plus, FolderOpen, Calculator } from 'lucide-react';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { OrganizerProvider, useOrganizer } from '@/context/OrganizerContext';
 import { Login } from '@/screens/Login';
 import { Dashboard } from '@/screens/Dashboard';
-import { Tasks } from '@/screens/Tasks';
 import { Trips } from '@/screens/Trips';
+import { Tasks } from '@/screens/Tasks';
 import { Contacts } from '@/screens/Contacts';
 import { More } from '@/screens/More';
 import { Search } from '@/screens/Search';
 import { TaskEditor } from '@/components/TaskEditor';
+import { Expenses } from '@/screens/Expenses';
+import { TravelDocs } from '@/screens/TravelDocs';
 import { getCountryFlag } from '@/lib/countryFlags';
 
-type Tab = 'heute' | 'aufgaben' | 'reisen' | 'kontakte' | 'mehr';
+type Tab = 'heute' | 'reisen' | 'mappe' | 'finanzen' | 'mehr' | 'aufgaben' | 'kontakte';
 
 const TABS: { key: Tab; label: string; icon: typeof Home }[] = [
   { key: 'heute', label: 'Heute', icon: Home },
-  { key: 'aufgaben', label: 'Aufgaben', icon: CheckSquare },
   { key: 'reisen', label: 'Reisen', icon: Plane },
-  { key: 'kontakte', label: 'Kontakte', icon: Users },
+  { key: 'mappe', label: 'Mappe', icon: FolderOpen },
+  { key: 'finanzen', label: 'Finanzen', icon: Wallet },
   { key: 'mehr', label: 'Mehr', icon: LayoutGrid },
 ];
 
@@ -33,7 +35,6 @@ function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const nextTripDestination = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
     const upcoming = tripsApi.trips.find((t) => t.destination);
     return upcoming?.destination ?? null;
   }, [tripsApi.trips]);
@@ -72,10 +73,12 @@ function AppShell() {
       )}
       <main className="min-h-screen w-full md:max-w-2xl md:mx-auto lg:max-w-3xl pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))] relative z-10">
         {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} />}
-        {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} />}
         {tab === 'reisen' && <Trips />}
-        {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} />}
-        {tab === 'mehr' && <More />}
+        {tab === 'mappe' && <TravelDocs />}
+        {tab === 'finanzen' && <Expenses />}
+        {tab === 'mehr' && <More onNavigate={(t) => setTab(t as Tab)} onOpenSearch={() => setSearchOpen(true)} />}
+        {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('mehr')} />}
+        {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('mehr')} />}
       </main>
 
       {fabVisible && (

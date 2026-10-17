@@ -221,6 +221,61 @@ export const TRAVEL_CLASS_LABELS: Record<TravelClass, string> = {
   First: 'First Class',
 };
 
+export interface TravelExpense {
+  id: string;
+  trip_id: string | null;
+  segment_id: string | null;
+  label: string;
+  amount: number;
+  currency: string;
+  amount_eur: number | null;
+  exchange_rate: number | null;
+  expense_date: string;
+  category: string | null;
+  paid_by: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PacklistItem {
+  id: string;
+  trip_id: string | null;
+  label: string;
+  category: string | null;
+  checked: boolean;
+  sort_index: number;
+  created_at: string;
+}
+
+export interface EmergencyInfo {
+  id: string;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  insurance_name: string | null;
+  insurance_phone: string | null;
+  embassy_name: string | null;
+  embassy_phone: string | null;
+  blood_type: string | null;
+  allergies: string | null;
+  medications: string | null;
+  medical_notes: string | null;
+  updated_at: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  trip_id: string | null;
+  segment_id: string | null;
+  entry_date: string;
+  title: string | null;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const EXPENSE_CATEGORIES = ['Tanken', 'Unterkunft', 'Restaurant', 'Lebensmittel', 'Transport', 'Ausflug', 'Sonstiges'] as const;
+export const PACKLIST_CATEGORIES = ['Dokumente', 'Kleidung', 'Technik', 'Gesundheit', 'Sonstiges'] as const;
+
 export const CHECKIN_REMINDER_LABELS: Record<CheckInReminderOffset, string> = {
   '48h': '48 Stunden vorher',
   '24h': '24 Stunden vorher',

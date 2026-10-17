@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search as SearchIcon, Trash2, CheckSquare, X } from 'lucide-react';
+import { Search as SearchIcon, Trash2, CheckSquare, X, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { SwipeableTaskItem } from '@/components/SwipeableTaskItem';
 import { TaskEditor } from '@/components/TaskEditor';
@@ -21,9 +21,10 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 interface TasksProps {
   onOpenSearch: () => void;
+  onBack?: () => void;
 }
 
-export function Tasks({ onOpenSearch }: TasksProps) {
+export function Tasks({ onOpenSearch, onBack }: TasksProps) {
   const { tasksApi, categoriesApi } = useOrganizer();
   const { tasks } = tasksApi;
   const [filter, setFilter] = useState<FilterKey>('offen');
@@ -102,7 +103,18 @@ export function Tasks({ onOpenSearch }: TasksProps) {
   return (
     <div className="px-4 pt-6 pb-[calc(96px+env(safe-area-inset-bottom))]">
       <header className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Aufgaben</h1>
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2.5 rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400"
+              aria-label="Zurück"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Aufgaben</h1>
+        </div>
         <div className="flex items-center gap-2">
           {!selectMode && (
             <button
