@@ -564,9 +564,9 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
               <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{weather.temperature}°</span>
             </div>
           )}
-          <div className="flex items-center gap-1.5 mt-0.5 text-[8px] text-slate-500 dark:text-slate-400">
-            {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={8} className="text-amber-500" />{sunriseStr}</span>}
-            {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={8} className="text-orange-500" />{sunsetStr}</span>}
+          <div className="flex items-center gap-2 mt-0.5 text-[9px]">
+            {sunriseStr && <span className="flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400"><Sunrise size={9} />{sunriseStr}</span>}
+            {sunsetStr && <span className="flex items-center gap-0.5 font-semibold text-green-600 dark:text-green-400"><Sunset size={9} />{sunsetStr}</span>}
           </div>
         </div>
       </div>
@@ -591,9 +591,9 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
           <span className="text-sm font-bold">{weather.temperature}°C</span>
         </div>
       )}
-      <div className={`flex items-center gap-2 mt-1 text-[8px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
-        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={8} className="text-amber-300" />{sunriseStr}</span>}
-        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={8} className="text-orange-300" />{sunsetStr}</span>}
+      <div className={`flex items-center gap-2 mt-1 text-[9px] ${highlight ? 'text-white/90' : 'text-slate-300'}`}>
+        {sunriseStr && <span className="flex items-center gap-0.5 font-semibold text-amber-300"><Sunrise size={9} />{sunriseStr}</span>}
+        {sunsetStr && <span className="flex items-center gap-0.5 font-semibold text-green-300"><Sunset size={9} />{sunsetStr}</span>}
       </div>
     </div>
   );
@@ -658,23 +658,13 @@ function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset, weather
           opacity="0.35"
         />
       )}
-      {/* Sunrise marker with minutes */}
+      {/* Sunrise marker */}
       {sunrisePos && (
-        <g>
-          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="3" fill="#f59e0b" />
-          <text x={sunrisePos.tx} y={sunrisePos.ty + 2} textAnchor="middle" fontSize="5" fontWeight="bold" fill="#f59e0b" fontFamily="monospace">
-            {String(sunrisePos.minutes).padStart(2, '0')}
-          </text>
-        </g>
+        <circle cx={sunrisePos.x} cy={sunrisePos.y} r="3" fill="#facc15" stroke="#white" strokeWidth="0.5" />
       )}
-      {/* Sunset marker with minutes */}
+      {/* Sunset marker */}
       {sunsetPos && (
-        <g>
-          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="3" fill="#f97316" />
-          <text x={sunsetPos.tx} y={sunsetPos.ty + 2} textAnchor="middle" fontSize="5" fontWeight="bold" fill="#f97316" fontFamily="monospace">
-            {String(sunsetPos.minutes).padStart(2, '0')}
-          </text>
-        </g>
+        <circle cx={sunsetPos.x} cy={sunsetPos.y} r="3" fill="#22c55e" stroke="#white" strokeWidth="0.5" />
       )}
       {/* Hour markers */}
       {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
