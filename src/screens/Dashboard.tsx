@@ -1,17 +1,81 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train, Cloud, CloudRain, Sun, CloudSun, CloudSnow, Wind, Droplets } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
-import { TaskItem } from '@/components/TaskItem';
-import { TaskEditor } from '@/components/TaskEditor';
 import { FlightStatusBadge } from '@/components/FlightStatusBadge';
 import { FlightDetail } from '@/components/FlightDetail';
-import { Task } from '@/types';
-import { sortTasks, isOverdue, isDueToday, formatRelativeDate, formatTime, formatDateShort, computeReminderAt, formatReminderCountdown, todayISO } from '@/lib/dateUtils';
+import { formatRelativeDate, formatTime, formatDateShort, todayISO } from '@/lib/dateUtils';
 import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flightApi';
 import { supabase } from '@/lib/supabase';
 import { getCountryFlag } from '@/lib/countryFlags';
 import { getAirportTimezone, getCityTimezone, formatTimeInZone } from '@/lib/timezoneData';
+
+interface WeatherData {
+  temperature: number;
+  weatherCode: number;
+  windSpeed: number;
+  humidity: number;
+}
+
+async function fetchWeather(lat: number, lon: number): Promise<WeatherData | null> {
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.current) return null;
+    return {
+      temperature: Math.round(data.current.temperature_2m),
+      weatherCode: data.current.weather_code,
+      windSpeed: Math.round(data.current.wind_speed_10m),
+      humidity: Math.round(data.current.relative_humidity_2m),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function geocodeCity(city: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'de' } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data[0]) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function weatherIcon(code: number): typeof Sun {
+  if (code === 0) return Sun;
+  if (code <= 3) return CloudSun;
+  if (code <= 48) return Cloud;
+  if (code <= 67) return CloudRain;
+  if (code <= 77) return CloudSnow;
+  if (code <= 82) return CloudRain;
+  if (code <= 99) return CloudRain;
+  return Cloud;
+}
+
+function weatherLabel(code: number): string {
+  if (code === 0) return 'Klar';
+  if (code <= 3) return 'Heiter';
+  if (code <= 48) return 'Nebel';
+  if (code <= 57) return 'Regen';
+  if (code <= 67) return 'Regen';
+  if (code <= 77) return 'Schnee';
+  if (code <= 82) return 'Regenschauer';
+  if (code <= 86) return 'Schneeschauer';
+  if (code <= 99) return 'Gewitter';
+  return 'Bewölkt';
+}
 
 interface DashboardProps {
   onNavigate: (tab: string) => void;
@@ -35,12 +99,9 @@ const CLOCK_COLOR_PRESETS = [
 ];
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { tasksApi, tripsApi } = useOrganizer();
+  const { tripsApi } = useOrganizer();
   const { user } = useAuth();
-  const { tasks } = tasksApi;
   const allSegments = tripsApi.segments;
-  const [taskEditorOpen, setTaskEditorOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [flightDetailSegment, setFlightDetailSegment] = useState<typeof allSegments[number] | null>(null);
   const [refreshingFlight, setRefreshingFlight] = useState(false);
   const [overdueChecklistItems, setOverdueChecklistItems] = useState<{ label: string }[]>([]);
@@ -49,6 +110,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [homeClockColor, setHomeClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-home-color') || '#3b82f6');
   const [destClockColor, setDestClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-dest-color') || '#f97316');
   const [clockColorsOpen, setClockColorsOpen] = useState(false);
+  const [homeWeather, setHomeWeather] = useState<WeatherData | null>(null);
+  const [destWeather, setDestWeather] = useState<WeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   const userName = useMemo(() => {
     const meta = user?.user_metadata;
@@ -61,23 +125,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
     return '';
   }, [user]);
-
-  const sorted = useMemo(() => sortTasks(tasks), [tasks]);
-
-  const overdueTasks = sorted.filter((t) => isOverdue(t));
-  const todayTasks = sorted.filter((t) => isDueToday(t) && t.status === 'offen');
-  const upcomingTasks = sorted
-    .filter((t) => t.status === 'offen' && t.due_date && !isOverdue(t) && !isDueToday(t))
-    .slice(0, 4);
-
-  const upcomingReminders = useMemo(() => {
-    return tasks
-      .filter((t) => t.status === 'offen' && t.reminder_offset !== 'none' && t.due_date)
-      .map((t) => ({ task: t, remindAt: computeReminderAt(t) }))
-      .filter((r) => r.remindAt && r.remindAt!.getTime() > Date.now())
-      .sort((a, b) => a.remindAt!.getTime() - b.remindAt!.getTime())
-      .slice(0, 3);
-  }, [tasks]);
 
   const nextFlight = useMemo(() => {
     const today = todayISO();
@@ -113,12 +160,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return tripsWithDeparture[0] ?? null;
   }, [tripsApi.trips, allSegments]);
 
-  const daysUntilTrip = useMemo(() => {
+  const tripCountdown = useMemo(() => {
     if (!nextTrip || !nextTrip.depDate) return null;
-    const today = new Date(todayISO() + 'T00:00:00');
-    const dep = new Date(nextTrip.depDate + 'T00:00:00');
-    return Math.round((dep.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  }, [nextTrip]);
+    const dep = new Date(nextTrip.depDate + 'T00:00:00').getTime();
+    const diff = dep - Date.now();
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, started: true };
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    return { days, hours, minutes, started: false };
+  }, [nextTrip, now]);
 
   useEffect(() => {
     if (!nextTrip) { setOverdueChecklistItems([]); return; }
@@ -139,14 +190,37 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       });
   }, [nextTrip]);
 
-  const openTripTasks = useMemo(() => {
-    if (!nextTrip) return [];
-    return tasks.filter((t) => t.trip_id === nextTrip.trip.id && t.status === 'offen');
-  }, [tasks, nextTrip]);
+  const fetchWeatherData = useCallback(async () => {
+    setWeatherLoading(true);
+    try {
+      const homeCoords = await geocodeCity('Nürnberg, Deutschland');
+      if (homeCoords) {
+        const w = await fetchWeather(homeCoords.lat, homeCoords.lon);
+        setHomeWeather(w);
+      }
+      if (nextTrip?.trip.destination) {
+        const destCoords = await geocodeCity(nextTrip.trip.destination);
+        if (destCoords) {
+          const w = await fetchWeather(destCoords.lat, destCoords.lon);
+          setDestWeather(w);
+        } else {
+          setDestWeather(null);
+        }
+      } else {
+        setDestWeather(null);
+      }
+    } catch {
+      // silent
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, [nextTrip?.trip.destination]);
 
-  const allOpenTasks = useMemo(() => {
-    return tasks.filter((t) => t.status === 'offen');
-  }, [tasks]);
+  useEffect(() => {
+    fetchWeatherData();
+    const id = setInterval(fetchWeatherData, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [fetchWeatherData]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -220,14 +294,23 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <MapPin size={14} />
               <span>{nextTrip.trip.destination ?? nextTrip.trip.name}</span>
             </div>
-            {daysUntilTrip !== null ? (
+            {tripCountdown ? (
               <div>
                 <p className="text-sm text-white/85">
                   {userName ? `${userName}, deine ` : 'Deine '}Reise nach {nextTrip.trip.destination ?? nextTrip.trip.name}
                 </p>
-                <p className="text-4xl font-bold mt-1">
-                  {daysUntilTrip === 0 ? 'startet heute!' : daysUntilTrip === 1 ? 'startet in 1 Tag' : `startet in ${daysUntilTrip} Tagen`}
-                </p>
+                {tripCountdown.started ? (
+                  <p className="text-4xl font-bold mt-1">startet heute!</p>
+                ) : (
+                  <div className="mt-1">
+                    <p className="text-4xl font-bold">
+                      {tripCountdown.days > 0 && `${tripCountdown.days} Tag${tripCountdown.days === 1 ? '' : 'e'}`}
+                    </p>
+                    <p className="text-lg font-semibold text-white/90 mt-0.5 tabular-nums">
+                      {String(tripCountdown.hours).padStart(2, '0')} Std {String(tripCountdown.minutes).padStart(2, '0')} Min
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div>
@@ -238,44 +321,25 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             )}
           </div>
 
-          {/* Open items with overdue highlight */}
-          {(hasOverdueItems || openTripTasks.length > 0 || allOpenTasks.length > 0) && (
+          {/* Overdue checklist items only */}
+          {hasOverdueItems && (
             <div className="mt-4 pt-4 border-t border-white/20 relative z-10 space-y-1.5">
-              {hasOverdueItems && (
-                <p className="text-xs font-bold text-red-300 flex items-center gap-1.5">
-                  <AlertCircle size={13} /> Überfällig:
-                </p>
-              )}
+              <p className="text-xs font-bold text-red-300 flex items-center gap-1.5">
+                <AlertCircle size={13} /> Überfällige Checkliste:
+              </p>
               {overdueChecklistItems.map((item) => (
                 <div key={item.label} className="flex items-center gap-2 text-sm text-red-300 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                   <span className="truncate">{item.label}</span>
                 </div>
               ))}
-              {(openTripTasks.length > 0 || (overdueChecklistItems.length === 0 && allOpenTasks.length > 0)) && (
-                <p className={`text-xs font-medium ${hasOverdueItems ? 'text-white/90 mt-2' : 'text-white/90'}`}>
-                  {hasOverdueItems ? 'Außerdem offen:' : 'Du musst noch:'}
-                </p>
-              )}
-              {openTripTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="flex items-center gap-2 text-sm text-white/85">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                  <span className="truncate">{task.title}</span>
-                </div>
-              ))}
-              {openTripTasks.length === 0 && overdueChecklistItems.length === 0 && allOpenTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="flex items-center gap-2 text-sm text-white/85">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                  <span className="truncate">{task.title}</span>
-                </div>
-              ))}
             </div>
           )}
 
-          {overdueChecklistItems.length === 0 && openTripTasks.length === 0 && allOpenTasks.length === 0 && (
+          {!hasOverdueItems && (
             <div className="mt-4 pt-4 border-t border-white/20 relative z-10">
               <p className="text-sm text-white/85 flex items-center gap-1.5">
-                <CheckCircle2 size={15} /> Alles erledigt – du bist startklar!
+                <CheckCircle2 size={15} /> Du bist startklar!
               </p>
             </div>
           )}
@@ -452,90 +516,38 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         )}
       </div>
 
-      {/* Overdue tasks */}
-      {overdueTasks.length > 0 && (
-        <Section title="Überfällig" count={overdueTasks.length} icon={<AlertCircle size={16} className="text-red-500" />}>
-          <div className="space-y-2">
-            {overdueTasks.slice(0, 3).map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onToggle={tasksApi.toggleTaskStatus}
-                onClick={(t) => {
-                  setEditingTask(t);
-                  setTaskEditorOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* Weather cards */}
+      <div>
+        <div className="flex items-center gap-2 mb-2.5">
+          <Cloud size={16} className="text-sky-500" />
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Wetter</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <WeatherCard
+            label="Nürnberg"
+            subLabel="Heimat"
+            weather={homeWeather}
+            loading={weatherLoading}
+          />
+          {nextTrip?.trip.destination ? (
+            <WeatherCard
+              label={nextTrip.trip.destination}
+              subLabel="Reiseziel"
+              weather={destWeather}
+              loading={weatherLoading}
+            />
+          ) : (
+            <WeatherCard
+              label="Reiseziel"
+              subLabel="noch offen"
+              weather={null}
+              loading={false}
+              dimmed
+            />
+          )}
+        </div>
+      </div>
 
-      {/* Today */}
-      <Section title="Heute" count={todayTasks.length} icon={<CheckCircle2 size={16} className="text-primary-600" />}>
-        {todayTasks.length === 0 ? (
-          <EmptyHint text="Nichts für heute. Zeit für eine Pause!" />
-        ) : (
-          <div className="space-y-2">
-            {todayTasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onToggle={tasksApi.toggleTaskStatus}
-                onClick={(t) => {
-                  setEditingTask(t);
-                  setTaskEditorOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Upcoming */}
-      {upcomingTasks.length > 0 && (
-        <Section title="Anstehend" icon={<Calendar size={16} className="text-slate-400" />}>
-          <div className="space-y-2">
-            {upcomingTasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onToggle={tasksApi.toggleTaskStatus}
-                onClick={(t) => {
-                  setEditingTask(t);
-                  setTaskEditorOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Reminders */}
-      {upcomingReminders.length > 0 && (
-        <Section title="Erinnerungen" icon={<Bell size={16} className="text-amber-500" />}>
-          <div className="space-y-2">
-            {upcomingReminders.map(({ task, remindAt }) => (
-              <div key={task.id} className="flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3.5">
-                <Bell size={16} className="text-amber-500 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{task.title}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300">{formatReminderCountdown(remindAt!)}</p>
-                </div>
-                <button
-                  onClick={() => tasksApi.updateTask(task.id, { reminder_offset: 'none' })}
-                  className="shrink-0 p-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                  aria-label="Erinnerung entfernen"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <TaskEditor open={taskEditorOpen} onClose={() => { setTaskEditorOpen(false); setEditingTask(null); }} task={editingTask} />
       {flightDetailSegment && (
         <FlightDetail
           segment={flightDetailSegment}
@@ -548,25 +560,47 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   );
 }
 
-function Section({ title, count, icon, children }: { title: string; count?: number; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 mb-2.5">
-        {icon}
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
-        {count !== undefined && count > 0 && (
-          <span className="text-xs font-medium text-slate-400 dark:text-slate-500">{count}</span>
-        )}
+function WeatherCard({ label, subLabel, weather, loading, dimmed }: {
+  label: string;
+  subLabel: string;
+  weather: WeatherData | null;
+  loading: boolean;
+  dimmed?: boolean;
+}) {
+  if (loading && !weather) {
+    return (
+      <div className={`rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px] ${dimmed ? 'opacity-50' : ''}`}>
+        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2">{label}</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
       </div>
-      {children}
-    </section>
-  );
-}
+    );
+  }
 
-function EmptyHint({ text }: { text: string }) {
+  if (!weather) {
+    return (
+      <div className={`rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px] ${dimmed ? 'opacity-50' : ''}`}>
+        <Cloud size={28} className="text-slate-300 dark:text-slate-600" />
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2">{label}</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Nicht verfügbar</p>
+      </div>
+    );
+  }
+
+  const Icon = weatherIcon(weather.weatherCode);
+
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-sm text-slate-400 dark:text-slate-500">
-      {text}
+    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col items-center justify-center min-h-[120px]">
+      <Icon size={28} className="text-sky-500" />
+      <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1.5">{weather.temperature}°C</p>
+      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</p>
+      <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
+      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-0.5"><Droplets size={10} /> {weather.humidity}%</span>
+        <span className="flex items-center gap-0.5"><Wind size={10} /> {weather.windSpeed} km/h</span>
+      </div>
+      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{weatherLabel(weather.weatherCode)}</p>
     </div>
   );
 }

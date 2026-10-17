@@ -43,6 +43,11 @@ export function Trips() {
     });
   }, [trips, segments]);
 
+  const selectedTripLive = useMemo(
+    () => trips.find((t) => t.id === selectedTrip?.id) ?? null,
+    [trips, selectedTrip]
+  );
+
   return (
     <div className="px-4 pt-6 pb-[calc(96px+env(safe-area-inset-bottom))]">
       <header className="flex items-center justify-between mb-4">
@@ -96,8 +101,8 @@ export function Trips() {
         </div>
       )}
 
-      {selectedTrip && (
-        <TripDetail trip={selectedTrip} onClose={() => setSelectedTrip(null)} />
+      {selectedTripLive && (
+        <TripDetail trip={selectedTripLive} onClose={() => setSelectedTrip(null)} />
       )}
       <AddTripSheet open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
@@ -112,6 +117,7 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
   const [trainDetailSeg, setTrainDetailSeg] = useState<TripSegment | null>(null);
   const [segEditorOpen, setSegEditorOpen] = useState(false);
   const [editingSeg, setEditingSeg] = useState<TripSegment | null>(null);
+  const [editTripOpen, setEditTripOpen] = useState(false);
 
   // Chronological sorting by departure date+time
   const sortedSegs = useMemo(() => {
@@ -138,13 +144,21 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
 
   return (
     <>
-    <Sheet open={!!trip && !flightDetailSeg && !trainDetailSeg && !segEditorOpen} onClose={onClose} title={trip.name}>
+    <Sheet open={!!trip && !flightDetailSeg && !trainDetailSeg && !segEditorOpen && !editTripOpen} onClose={onClose} title={trip.name}>
       <div className="space-y-5">
-        {trip.destination && (
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <MapPin size={15} /> {trip.destination}
-          </div>
-        )}
+        <div className="flex items-center justify-between">
+          {trip.destination && (
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <MapPin size={15} /> {trip.destination}
+            </div>
+          )}
+          <button
+            onClick={() => setEditTripOpen(true)}
+            className="ml-auto h-8 px-3 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 active:scale-95 transition-transform"
+          >
+            <Pencil size={13} /> Bearbeiten
+          </button>
+        </div>
 
         {/* Overall trip status banner */}
         {sortedSegs.length > 0 && (
@@ -443,6 +457,14 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
         tripName={trip.name}
       />
     )}
+
+    {editTripOpen && (
+      <EditTripSheet
+        open={editTripOpen}
+        onClose={() => setEditTripOpen(false)}
+        trip={trip}
+      />
+    )}
     </>
   );
 }
@@ -574,6 +596,60 @@ function AddTripSheet({ open, onClose }: { open: boolean; onClose: () => void })
         <label className="block">
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Name der Reise</span>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Namibia-Reise" className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" autoFocus />
+        </label>
+        <label className="block">
+          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Reiseziel</span>
+          <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="z. B. Windhoek, Namibia" className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" />
+        </label>
+        <label className="block">
+          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Wichtige Hinweise</span>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="z. B. Visum, Impfungen…" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500 resize-none" />
+        </label>
+      </div>
+    </Sheet>
+  );
+}
+
+function EditTripSheet({ open, onClose, trip }: { open: boolean; onClose: () => void; trip: Trip }) {
+  const { tripsApi } = useOrganizer();
+  const [name, setName] = useState(trip.name);
+  const [destination, setDestination] = useState(trip.destination ?? '');
+  const [notes, setNotes] = useState(trip.notes ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await tripsApi.updateTrip(trip.id, {
+        name: name.trim(),
+        destination: destination.trim() || null,
+        notes: notes.trim() || null,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Reise bearbeiten"
+      footer={
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium text-sm">Abbrechen</button>
+          <button onClick={handleSave} disabled={!name.trim() || saving} className="flex-1 h-11 rounded-xl bg-primary-600 text-white font-semibold text-sm disabled:opacity-50">
+            {saving ? 'Speichert…' : 'Speichern'}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <label className="block">
+          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Name der Reise</span>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" autoFocus />
         </label>
         <label className="block">
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Reiseziel</span>
