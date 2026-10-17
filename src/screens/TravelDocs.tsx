@@ -1,11 +1,14 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Plus, Trash2, FileText, Plane, Hotel, Car, Package, FolderOpen } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Plus, Trash2, FileText, Plane, Hotel, Car, Package, FolderOpen, Camera, Upload, Shield, Lock, Eye, Fingerprint } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
+import { DocLock } from '@/components/DocLock';
 import { WalletDocument } from '@/types';
 import { formatDateShort } from '@/lib/dateUtils';
 import { useAuth } from '@/context/AuthContext';
+import { isDocPinSet } from '@/lib/docSecurity';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const DOC_TYPE_ICON: Record<string, typeof FileText> = {
   'flugticket': Plane,
@@ -23,6 +26,7 @@ export function TravelDocs() {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [filterTrip, setFilterTrip] = useState<string | null>(null);
+  const [locked, setLocked] = useState(isDocPinSet());
 
   const fetchDocuments = useCallback(async () => {
     if (!user) { setDocuments([]); setLoading(false); return; }
@@ -58,58 +62,73 @@ export function TravelDocs() {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
   };
 
+  const pinActive = isDocPinSet();
+
   return (
     <div className="px-4 pt-6 pb-[calc(96px+env(safe-area-inset-bottom))]">
       <header className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Reisemappe</h1>
         <button
           onClick={() => setAddOpen(true)}
-          className="h-10 px-4 rounded-full bg-primary-600 text-white text-sm font-medium flex items-center gap-1.5 active:scale-95 transition-transform"
+          disabled={locked && pinActive}
+          className="h-10 px-4 rounded-full bg-primary-600 text-white text-sm font-medium flex items-center gap-1.5 active:scale-95 transition-transform disabled:opacity-50"
         >
           <Plus size={18} /> Dokument
         </button>
       </header>
 
-      {/* Trip filter */}
-      {trips.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 mb-4">
-          <button
-            onClick={() => setFilterTrip(null)}
-            className={`shrink-0 h-9 px-3.5 rounded-full text-sm font-medium ${!filterTrip ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
-          >
-            Alle
-          </button>
-          {trips.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setFilterTrip(t.id)}
-              className={`shrink-0 h-9 px-3.5 rounded-full text-sm font-medium ${filterTrip === t.id ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mb-4">
+        <DocLock locked={locked} onUnlocked={() => setLocked(false)} onLock={() => setLocked(true)} />
+      </div>
 
-      {loading ? (
-        <div className="text-center text-sm text-slate-400 py-8">Lädt…</div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center">
-          <FolderOpen size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-          <p className="text-sm text-slate-400 dark:text-slate-500">Noch keine Dokumente hinterlegt.</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Buchungsbestätigungen, Tickets und mehr.</p>
+      {locked && pinActive ? (
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center">
+          <Lock size={28} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+          <p className="text-sm text-slate-400 dark:text-slate-500">Entsperre die Reisemappe oben, um deine Dokumente zu sehen und hinzuzufügen.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((doc) => (
-            <DocRow
-              key={doc.id}
-              doc={doc}
-              tripName={trips.find((t) => t.id === doc.trip_id)?.name}
-              onDelete={() => deleteDocument(doc.id)}
-            />
-          ))}
-        </div>
+        <>
+          {trips.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 mb-4">
+              <button
+                onClick={() => setFilterTrip(null)}
+                className={`shrink-0 h-9 px-3.5 rounded-full text-sm font-medium ${!filterTrip ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
+              >
+                Alle
+              </button>
+              {trips.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setFilterTrip(t.id)}
+                  className={`shrink-0 h-9 px-3.5 rounded-full text-sm font-medium ${filterTrip === t.id ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center text-sm text-slate-400 py-8">Lädt…</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center">
+              <FolderOpen size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+              <p className="text-sm text-slate-400 dark:text-slate-500">Noch keine Dokumente hinterlegt.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Scanne oder fotografiere Dokumente, oder hinterlege Buchungsnummern.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((doc) => (
+                <DocRow
+                  key={doc.id}
+                  doc={doc}
+                  tripName={trips.find((t) => t.id === doc.trip_id)?.name}
+                  onDelete={() => deleteDocument(doc.id)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {addOpen && (
@@ -126,11 +145,34 @@ export function TravelDocs() {
 
 function DocRow({ doc, tripName, onDelete }: { doc: WalletDocument; tripName?: string; onDelete: () => void }) {
   const Icon = DOC_TYPE_ICON[doc.doc_type] ?? FileText;
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreview() {
+      if (!doc.file_path) return;
+      try {
+        const result = await Filesystem.readFile({ path: doc.file_path, directory: Directory.Data });
+        if (!cancelled && typeof result.data === 'string' && doc.file_type?.startsWith('image/')) {
+          setImagePreview(`data:${doc.file_type};base64,${result.data}`);
+        }
+      } catch {
+        // file not found or read error
+      }
+    }
+    loadPreview();
+    return () => { cancelled = true; };
+  }, [doc.file_path, doc.file_type]);
+
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5">
-      <span className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 flex items-center justify-center shrink-0">
-        <Icon size={20} />
-      </span>
+      {imagePreview ? (
+        <img src={imagePreview} alt={doc.label} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+      ) : (
+        <span className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 flex items-center justify-center shrink-0">
+          <Icon size={20} />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.label}</p>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -166,21 +208,75 @@ function AddDocSheet({ open, onClose, trips, onSave }: {
   const [label, setLabel] = useState('');
   const [docType, setDocType] = useState('sonstiges');
   const [tripId, setTripId] = useState(trips[0]?.id ?? '');
-  const [fileName, setFileName] = useState('');
+  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [capturedImage, setCapturedImage] = useState<{ data: string; name: string; type: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, isCamera: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Data = (reader.result as string).split(',')[1];
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `wallet-docs/${tripId}/${fileName}`;
+        try {
+          await Filesystem.writeFile({
+            path: filePath,
+            data: base64Data,
+            directory: Directory.Data,
+            recursive: true,
+          });
+          setCapturedImage({ data: base64Data, name: file.name, type: file.type });
+          if (!label) setLabel(file.name.replace(/\.[^.]+$/, ''));
+        } catch {
+          setError('Datei konnte nicht gespeichert werden.');
+        }
+      };
+      reader.onerror = () => setError('Datei konnte nicht gelesen werden.');
+      reader.readAsDataURL(file);
+    } catch {
+      setError('Ein Fehler ist aufgetreten.');
+    }
+    if (isCamera && cameraInputRef.current) cameraInputRef.current.value = '';
+    if (!isCamera && fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSave = async () => {
     if (!label.trim() || !tripId) return;
     setSaving(true);
+    setError(null);
     try {
+      let filePath = '';
+      let fileName = note.trim() || 'manuell';
+
+      if (capturedImage) {
+        const storedName = `${Date.now()}-${capturedImage.name}`;
+        filePath = `wallet-docs/${tripId}/${storedName}`;
+        await Filesystem.writeFile({
+          path: filePath,
+          data: capturedImage.data,
+          directory: Directory.Data,
+          recursive: true,
+        });
+        fileName = capturedImage.name;
+      }
+
       await onSave({
         label: label.trim(),
-        doc_type: docType,
+        doc_type: capturedImage ? 'sonstiges' : docType,
         trip_id: tripId,
-        file_name: fileName.trim() || 'manuell',
-        file_path: '',
+        file_name: fileName,
+        file_path: filePath,
       });
-      setLabel(''); setDocType('sonstiges'); setFileName('');
+      setLabel(''); setDocType('sonstiges'); setNote(''); setCapturedImage(null);
+    } catch {
+      setError('Speichern fehlgeschlagen.');
     } finally {
       setSaving(false);
     }
@@ -202,8 +298,54 @@ function AddDocSheet({ open, onClose, trips, onSave }: {
     >
       <div className="space-y-4">
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Hinterlege hier wichtige Reisedokumente wie Buchungsnummern, Bestätigungen oder Tickets. Du kannst auch nur die Buchungsnummer oder einen Link notieren – ein Datei-Upload ist nicht erforderlich.
+          Scanne oder fotografiere ein Dokument mit der Kamera, lade eine Datei hoch, oder hinterlege nur eine Buchungsnummer oder Notiz.
         </p>
+
+        {capturedImage && (
+          <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
+            <img src={`data:${capturedImage.type};base64,${capturedImage.data}`} alt="Vorschau" className="w-full max-h-48 object-cover" />
+            <button
+              onClick={() => setCapturedImage(null)}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"
+              aria-label="Entfernen"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="h-12 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium text-sm flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Camera size={18} className="text-primary-500" /> Scannen
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="h-12 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium text-sm flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Upload size={18} className="text-primary-500" /> Datei
+          </button>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => handleFileSelect(e, true)}
+            className="hidden"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => handleFileSelect(e, false)}
+            className="hidden"
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
         <label className="block">
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Bezeichnung</span>
           <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="z. B. Flugticket Frankfurt–Windhoek" className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" autoFocus />
@@ -222,7 +364,7 @@ function AddDocSheet({ open, onClose, trips, onSave }: {
         </label>
         <label className="block">
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Buchungsnummer / Notiz (optional)</span>
-          <input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="z. B. ABC123XY" className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" />
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. ABC123XY" className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500" />
         </label>
       </div>
     </Sheet>
