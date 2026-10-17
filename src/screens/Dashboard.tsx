@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train, Cloud, CloudRain, Sun, CloudSun, CloudSnow, Wind, Droplets } from 'lucide-react';
+import { Plane, Calendar, AlertCircle, CheckCircle2, Bell, ChevronRight, ChevronDown, ChevronUp, RefreshCw, X, MapPin, Globe, Clock, Navigation, Train, Cloud, CloudRain, Sun, CloudSun, CloudSnow, Wind, Droplets, Sunrise, Sunset } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
 import { FlightStatusBadge } from '@/components/FlightStatusBadge';
@@ -15,12 +15,14 @@ interface WeatherData {
   weatherCode: number;
   windSpeed: number;
   humidity: number;
+  sunrise: string | null;
+  sunset: string | null;
 }
 
 async function fetchWeather(lat: number, lon: number): Promise<WeatherData | null> {
   try {
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=sunrise,sunset&timezone=auto`
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -30,6 +32,8 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData | nul
       weatherCode: data.current.weather_code,
       windSpeed: Math.round(data.current.wind_speed_10m),
       humidity: Math.round(data.current.relative_humidity_2m),
+      sunrise: data?.daily?.sunrise?.[0] ?? null,
+      sunset: data?.daily?.sunset?.[0] ?? null,
     };
   } catch {
     return null;
@@ -485,11 +489,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} />
+          <ClockCard label="Nürnberg" subLabel="Deutschland" tz={homeTimezone} now={now} style={clockStyle} highlight accentColor={homeClockColor} sunrise={homeWeather?.sunrise ?? null} sunset={homeWeather?.sunset ?? null} />
           {destinationTimezone ? (
-            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight />
+            <ClockCard label={destinationTimezone.label} subLabel="Reiseziel" tz={destinationTimezone.tz} now={now} style={clockStyle} accentColor={destClockColor} highlight sunrise={destWeather?.sunrise ?? null} sunset={destWeather?.sunset ?? null} />
           ) : (
-            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={destClockColor} />
+            <ClockCard label="Reiseziel" subLabel="noch offen" tz={homeTimezone} now={now} style={clockStyle} dimmed accentColor={destClockColor} sunrise={null} sunset={null} />
           )}
         </div>
         {/* Collapsible color picker */}
@@ -605,7 +609,20 @@ function WeatherCard({ label, subLabel, weather, loading, dimmed }: {
   );
 }
 
-function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentColor }: {
+function formatSunTime(iso: string | null, tz: string): string | null {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat('de-DE', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return null;
+  }
+}
+
+function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentColor, sunrise, sunset }: {
   label: string;
   subLabel: string;
   tz: string;
@@ -614,19 +631,23 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
   highlight?: boolean;
   dimmed?: boolean;
   accentColor: string;
+  sunrise: string | null;
+  sunset: string | null;
 }) {
   const { time, date, offset } = formatTimeInZone(tz);
+  const sunriseStr = formatSunTime(sunrise, tz);
+  const sunsetStr = formatSunTime(sunset, tz);
 
   if (style === 'analog') {
     return (
-      <div className={`rounded-2xl border p-4 flex flex-col items-center ${
+      <div className={`rounded-3xl border p-4 flex flex-col items-center ${
         highlight
           ? 'border-2'
           : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
       } ${dimmed ? 'opacity-50' : ''}`}
       style={highlight ? { borderColor: accentColor, backgroundColor: `${accentColor}15` } : undefined}
       >
-        <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} />
+        <AnalogClock tz={tz} now={now} highlight={highlight} accentColor={accentColor} sunrise={sunrise} sunset={sunset} />
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-2 truncate w-full text-center">{label}</p>
         <p className="text-[10px] text-slate-500 dark:text-slate-400">{subLabel}</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums font-mono">{date}</p>
@@ -635,7 +656,7 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
   }
 
   return (
-    <div className={`rounded-2xl border p-4 flex flex-col items-center justify-center min-h-[140px] ${
+    <div className={`rounded-3xl border p-4 flex flex-col items-center justify-center min-h-[140px] ${
       highlight
         ? 'border-transparent text-white'
         : 'bg-slate-900 dark:bg-slate-800 border-slate-700 text-white'
@@ -643,14 +664,18 @@ function ClockCard({ label, subLabel, tz, now, style, highlight, dimmed, accentC
     style={highlight ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)` } : undefined}
     >
       <p className="text-sm font-medium truncate w-full text-center mb-1">{label}</p>
-      <p className={`text-[10px] mb-3 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
+      <p className={`text-[10px] mb-1 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{subLabel}</p>
       <p className="text-2xl font-bold tabular-nums font-mono tracking-wider">{time}</p>
-      <p className={`text-[10px] mt-1 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
+      <p className={`text-[10px] mt-0.5 ${highlight ? 'text-white/70' : 'text-slate-400'}`}>{offset} · {date}</p>
+      <div className={`flex items-center gap-2 mt-1.5 text-[10px] ${highlight ? 'text-white/80' : 'text-slate-400'}`}>
+        {sunriseStr && <span className="flex items-center gap-0.5"><Sunrise size={10} /> {sunriseStr}</span>}
+        {sunsetStr && <span className="flex items-center gap-0.5"><Sunset size={10} /> {sunsetStr}</span>}
+      </div>
     </div>
   );
 }
 
-function AnalogClock({ tz, now, highlight, accentColor }: { tz: string; now: number; highlight?: boolean; accentColor: string }) {
+function AnalogClock({ tz, now, highlight, accentColor, sunrise, sunset }: { tz: string; now: number; highlight?: boolean; accentColor: string; sunrise: string | null; sunset: string | null }) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
@@ -667,10 +692,55 @@ function AnalogClock({ tz, now, highlight, accentColor }: { tz: string; now: num
   const minuteAngle = (m * 6) + (s * 0.1);
   const secondAngle = s * 6;
 
+  // Convert ISO sunrise/sunset to positions on the clock arc
+  const sunPos = (iso: string | null) => {
+    if (!iso) return null;
+    try {
+      const sunParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      }).formatToParts(new Date(iso));
+      const sh = parseInt(sunParts.find((p) => p.type === 'hour')?.value ?? '0', 10) % 24;
+      const sm = parseInt(sunParts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+      const angleDeg = ((sh + sm / 60) / 24) * 360;
+      const rad = (angleDeg - 90) * (Math.PI / 180);
+      return { x: 50 + 44 * Math.cos(rad), y: 50 + 44 * Math.sin(rad) };
+    } catch {
+      return null;
+    }
+  };
+  const sunrisePos = sunPos(sunrise);
+  const sunsetPos = sunPos(sunset);
+
   return (
     <svg viewBox="0 0 100 100" className="w-24 h-24">
       {/* Face */}
       <circle cx="50" cy="50" r="46" fill={highlight ? 'white' : '#1e293b'} stroke={highlight ? accentColor : '#334155'} strokeWidth="2" />
+      {/* Day arc between sunrise and sunset */}
+      {sunrisePos && sunsetPos && (
+        <path
+          d={`M ${sunrisePos.x} ${sunrisePos.y} A 44 44 0 0 1 ${sunsetPos.x} ${sunsetPos.y}`}
+          fill="none"
+          stroke={accentColor}
+          strokeWidth="2"
+          strokeLinecap="round"
+          opacity="0.35"
+        />
+      )}
+      {/* Sunrise marker */}
+      {sunrisePos && (
+        <g>
+          <circle cx={sunrisePos.x} cy={sunrisePos.y} r="3" fill="#f59e0b" />
+        </g>
+      )}
+      {/* Sunset marker */}
+      {sunsetPos && (
+        <g>
+          <circle cx={sunsetPos.x} cy={sunsetPos.y} r="3" fill="#f97316" />
+        </g>
+      )}
       {/* Hour markers */}
       {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
         const angle = (i * 30 - 90) * (Math.PI / 180);
