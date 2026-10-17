@@ -272,6 +272,21 @@ export interface JournalEntry {
   updated_at: string;
 }
 
+export interface LocationPhoto {
+  id: string;
+  user_id: string;
+  trip_id: string | null;
+  label: string | null;
+  city_name: string | null;
+  country_name: string | null;
+  latitude: number;
+  longitude: number;
+  file_path: string;
+  file_name: string;
+  file_type: string | null;
+  created_at: string;
+}
+
 export const EXPENSE_CATEGORIES = ['Tanken', 'Unterkunft', 'Restaurant', 'Lebensmittel', 'Transport', 'Ausflug', 'Sonstiges'] as const;
 export const PACKLIST_CATEGORIES = ['Dokumente', 'Kleidung', 'Technik', 'Gesundheit', 'Sonstiges'] as const;
 

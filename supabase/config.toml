@@ -3,4 +3,6 @@ verify_jwt = false
 
 [functions.rail-status]
 verify_jwt = false
-# v2 diagnostic deploy
+
+[functions.reverse-geocode]
+verify_jwt = false
