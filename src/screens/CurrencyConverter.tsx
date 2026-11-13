@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
 import { X, ArrowDownUp, ChevronDown } from 'lucide-react';
-import { SUPPORTED_CURRENCIES, fetchExchangeRates, convertCurrency, getCachedRates, getFallbackRates, type ExchangeRateResponse } from '@/lib/currencyApi';
+import { SUPPORTED_CURRENCIES, fetchExchangeRates, convertCurrency, getCachedRates, type ExchangeRateResponse } from '@/lib/currencyApi';
 import { isOnline } from '@/lib/permissions';
 import { useBackButton } from '@/hooks/useBackButton';
 
 interface CurrencyConverterProps {
   onClose: () => void;
+}
+
+function formatRateStamp(data: ExchangeRateResponse): string {
+  if (!data.fetchedAt) return data.date;
+  return new Date(data.fetchedAt).toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
@@ -16,6 +27,7 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
   const [rateDate, setRateDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
+  const [noRates, setNoRates] = useState(false);
   useBackButton(true, onClose);
 
   useEffect(() => {
@@ -24,7 +36,7 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
     const applyRates = (data: ExchangeRateResponse, stale: boolean) => {
       if (cancelled) return;
       setRates({ ...data.rates, [data.base]: 1 });
-      setRateDate(stale ? `${data.date} (gespeichert)` : data.date);
+      setRateDate(formatRateStamp(data));
       setUsingFallback(stale);
       setLoading(false);
     };
@@ -37,7 +49,13 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
           // Auf gespeicherte Kurse zurückfallen.
         }
       }
-      applyRates(getCachedRates('EUR') ?? getFallbackRates('EUR'), true);
+      const cached = getCachedRates('EUR');
+      if (cached) {
+        applyRates(cached, true);
+      } else if (!cancelled) {
+        setNoRates(true);
+        setLoading(false);
+      }
     };
     void load();
     return () => {
@@ -138,6 +156,11 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
         {loading ? (
           <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 text-center">
             <p className="text-sm text-slate-400 dark:text-slate-500 animate-pulse">Kurse werden geladen…</p>
+          </div>
+        ) : noRates ? (
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 text-center">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Keine Kurse verfügbar</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Bitte einmal mit Internetverbindung öffnen. Danach funktioniert der Rechner auch offline.</p>
           </div>
         ) : (
           <>

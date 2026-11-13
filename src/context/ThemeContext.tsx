@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { ACCENT_PRESETS, AccentPreset, applyAccentPreset, getAccentPresetById } from '@/lib/accentColors';
+import { ACCENT_PRESETS, AccentPreset, applyAccentPreset, getAccentPresetById, resolveAccentId } from '@/lib/accentColors';
 
 type Theme = 'light' | 'dark';
 
@@ -23,8 +23,7 @@ function getInitialTheme(): Theme {
 }
 
 function getInitialAccentId(): string {
-  const stored = localStorage.getItem('klarly-accent');
-  return stored && ACCENT_PRESETS.some((p) => p.id === stored) ? stored : 'blue';
+  return resolveAccentId(localStorage.getItem('klarly-accent'));
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

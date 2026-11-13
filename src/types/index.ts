@@ -122,6 +122,7 @@ export interface Contact {
   id: string;
   name: string;
   organization: string | null;
+  address: string | null;
   phone: string | null;
   phone_alt: string | null;
   email: string | null;
@@ -129,15 +130,6 @@ export interface Contact {
   notes: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface TaskChecklistItem {
-  id: string;
-  task_id: string;
-  text: string;
-  checked: boolean;
-  order_index: number;
-  created_at: string;
 }
 
 export interface WalletDocument {
@@ -212,6 +204,8 @@ export const TRAVEL_CLASS_LABELS: Record<TravelClass, string> = {
   First: 'First Class',
 };
 
+export type RateStatus = 'ok' | 'cached' | 'missing';
+
 export interface TravelExpense {
   id: string;
   trip_id: string | null;
@@ -221,10 +215,18 @@ export interface TravelExpense {
   currency: string;
   amount_eur: number | null;
   exchange_rate: number | null;
+  rate_status: RateStatus | null;
+  rate_date: string | null;
   expense_date: string;
   category: string | null;
   paid_by: string | null;
   notes: string | null;
+  created_at: string;
+}
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
   created_at: string;
 }
 
@@ -279,8 +281,16 @@ export interface LocationPhoto {
   created_at: string;
 }
 
-export const EXPENSE_CATEGORIES = ['Tanken', 'Unterkunft', 'Restaurant', 'Lebensmittel', 'Transport', 'Ausflug', 'Sonstiges'] as const;
-export const PACKLIST_CATEGORIES = ['Dokumente', 'Kleidung', 'Technik', 'Gesundheit', 'Sonstiges'] as const;
+export const EXPENSE_CATEGORIES = ['Tanken', 'Essen', 'Geschenke', 'Massage', 'Unterkunft', 'Transport', 'Sonstiges'] as const;
+export const PACKLIST_CATEGORIES = ['Dokumente', 'Kleidung', 'Kulturbeutel', 'Technik', 'Gesundheit', 'Sonstiges'] as const;
+
+export const PACKLIST_SUGGESTIONS: Record<string, string[]> = {
+  Dokumente: ['Reisepass', 'Personalausweis', 'Flugtickets', 'Kreditkarte', 'Reiseversicherung'],
+  Kleidung: ['Unterwäsche', 'Socken', 'T-Shirts', 'Hose', 'Jacke', 'Badebekleidung'],
+  Kulturbeutel: ['Zahnbürste', 'Zahnpasta', 'Deo', 'Duschgel', 'Rasierer'],
+  Technik: ['Ladegerät', 'Steckdosenadapter', 'Powerbank', 'Kopfhörer'],
+  Gesundheit: ['Schmerzmittel', 'Pflaster', 'Sonnencreme', 'Persönliche Medikamente'],
+};
 
 export const CHECKIN_REMINDER_LABELS: Record<CheckInReminderOffset, string> = {
   '48h': '48 Stunden vorher',

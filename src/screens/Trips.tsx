@@ -14,6 +14,7 @@ import { SegmentEditor } from '@/components/SegmentEditor';
 import { formatRelativeDate, formatTime, formatDateShort, todayISO, combineDateTime } from '@/lib/dateUtils';
 import { generateSuggestedFlightReminders, generateSuggestedTrainReminders } from '@/lib/tripReminders';
 import { computeTripOverallStatus, computeConnections, getSegmentTransportStatus, formatDuration } from '@/lib/travelStatus';
+import { tripEndDate } from '@/lib/tripDates';
 
 const SEGMENT_ICON: Record<SegmentType, typeof Plane> = {
   flug: Plane,
@@ -21,14 +22,6 @@ const SEGMENT_ICON: Record<SegmentType, typeof Plane> = {
   mietwagen: Car,
   bahn: Train,
 };
-
-function tripEndDate(tripSegs: TripSegment[]): string | null {
-  return tripSegs.reduce<string | null>((latest, s) => {
-    const d = s.arrival_date ?? s.departure_date;
-    if (!d) return latest;
-    return latest === null || d > latest ? d : latest;
-  }, null);
-}
 
 export function Trips() {
   const { tripsApi } = useOrganizer();

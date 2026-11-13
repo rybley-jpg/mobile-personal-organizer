@@ -75,7 +75,7 @@ function AppShell() {
         {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} />}
         {tab === 'reise' && <Trips />}
         {tab === 'mappe' && <TravelDocs />}
-        {tab === 'finanzen' && <Expenses />}
+        {tab === 'finanzen' && <Expenses onNavigate={(t) => setTab(t as Tab)} />}
         {tab === 'funktionen' && <More onNavigate={(t) => setTab(t as Tab)} onOpenSearch={() => setSearchOpen(true)} />}
         {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('funktionen')} />}
         {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('funktionen')} />}

@@ -2,6 +2,7 @@ export interface ExchangeRateResponse {
   base: string;
   rates: Record<string, number>;
   date: string;
+  fetchedAt?: string;
 }
 
 export async function fetchExchangeRates(baseCurrency: string): Promise<ExchangeRateResponse> {
@@ -35,6 +36,8 @@ export async function fetchExchangeRates(baseCurrency: string): Promise<Exchange
     throw new Error('Received malformed exchange rate data from the API.');
   }
 
+  data = { ...data, fetchedAt: new Date().toISOString() };
+
   try {
     localStorage.setItem(ratesCacheKey(baseCurrency), JSON.stringify(data));
   } catch {
@@ -57,22 +60,6 @@ export function getCachedRates(base: string): ExchangeRateResponse | null {
   } catch {
     return null;
   }
-}
-
-const FALLBACK_RATES: Record<string, number> = {
-  EUR: 1, USD: 1.08, GBP: 0.85, CHF: 0.95, NAD: 20.5, ZAR: 20.5,
-  JPY: 162, CNY: 7.85, AUD: 1.65, CAD: 1.47, NZD: 1.78, INR: 90.5,
-  BRL: 5.95, MXN: 19.8, TRY: 35.2, AED: 3.97, SGD: 1.45, HKD: 8.42,
-  THB: 38.5, SEK: 11.4, NOK: 11.8, DKK: 7.46, PLN: 4.30, CZK: 25.2,
-  HUF: 389, RON: 4.97,
-};
-
-export function getFallbackRates(base: string): ExchangeRateResponse {
-  return {
-    base,
-    rates: FALLBACK_RATES,
-    date: new Date().toISOString().slice(0, 10),
-  };
 }
 
 export function convertCurrency(

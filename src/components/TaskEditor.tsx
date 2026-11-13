@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Trash2, Plus, Check, X, ListChecks } from 'lucide-react';
+import { Trash2, Check, Star } from 'lucide-react';
 import { Sheet } from '@/components/ui/Sheet';
 import { useDeleteRequest } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
-import { useChecklist } from '@/hooks/useChecklist';
 import { useTaskCategories } from '@/hooks/useTaskCategories';
 import { supabase } from '@/lib/supabase';
 import { Task, Priority, ReminderOffset, RepeatRule, TaskStatus } from '@/types';
-import { PRIORITY_LABELS, REMINDER_OFFSET_LABELS, REPEAT_LABELS } from '@/types';
+import { REMINDER_OFFSET_LABELS, REPEAT_LABELS } from '@/types';
+import { tripStartDate } from '@/lib/tripDates';
 import { CategoryIcon } from '@/components/CategoryIcon';
 
 interface TaskEditorProps {
@@ -44,14 +44,19 @@ const EMPTY_DRAFT: TaskDraft = {
   status: 'offen',
 };
 
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: TaskEditorProps) {
   const { categoriesApi, tasksApi, tripsApi } = useOrganizer();
   const { categories } = categoriesApi;
   const [draft, setDraft] = useState<TaskDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [newChecklistItem, setNewChecklistItem] = useState('');
-  const { items: checklistItems, addItem: addChecklistItem, toggleItem: toggleChecklistItem, deleteItem: deleteChecklistItem } = useChecklist(task?.id ?? null);
   const { categoryIds: existingCategoryIds, setCategories: saveTaskCategories } = useTaskCategories(task?.id ?? null);
 
   useEffect(() => {
@@ -152,6 +157,10 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
   };
   const { requestDelete, confirmDialog } = useDeleteRequest(task?.title || 'Aufgabe', handleDelete);
 
+  const tripStartForDraft = draft.trip_id
+    ? tripStartDate(tripsApi.segments.filter((s) => s.trip_id === draft.trip_id))
+    : null;
+
   return (
     <Sheet
       open={open}
@@ -225,6 +234,16 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
           </Field>
         </div>
 
+        {tripStartForDraft && (
+          <button
+            type="button"
+            onClick={() => update('due_date', addDaysIso(tripStartForDraft, -7))}
+            className="-mt-2 text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+          >
+            Eine Woche vor Abflug ({addDaysIso(tripStartForDraft, -7)})
+          </button>
+        )}
+
         <Field label="Status">
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -250,27 +269,21 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
           </div>
         </Field>
 
-        <Field label="Priorität">
-          <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => update('priority', p)}
-                className={`h-10 rounded-xl text-sm font-medium transition-colors ${
-                  draft.priority === p
-                    ? p === 'hoch'
-                      ? 'bg-red-600 text-white'
-                      : p === 'normal'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-slate-500 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                {PRIORITY_LABELS[p]}
-              </button>
-            ))}
-          </div>
-        </Field>
+        <button
+          type="button"
+          onClick={() => update('priority', draft.priority === 'hoch' ? 'normal' : 'hoch')}
+          aria-pressed={draft.priority === 'hoch'}
+          className={`w-full h-11 px-4 rounded-xl flex items-center justify-between text-sm font-medium transition-colors ${
+            draft.priority === 'hoch'
+              ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+              : 'bg-slate-100 dark:bg-slate-800 border border-transparent text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-2"><Star size={16} className={draft.priority === 'hoch' ? 'fill-current' : ''} />Als wichtig markieren</span>
+          <span className={`w-10 h-6 rounded-full p-0.5 transition-colors ${draft.priority === 'hoch' ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+            <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${draft.priority === 'hoch' ? 'translate-x-4' : ''}`} />
+          </span>
+        </button>
 
         <Field label="Kategorien">
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-2">Mehrfachauswahl möglich – tippe mehrere an.</p>
@@ -328,78 +341,6 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
               ]}
             />
           </Field>
-        )}
-
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-        {/* Checklist - only for existing tasks */}
-        {task && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <ListChecks size={15} className="text-slate-400 dark:text-slate-500" />
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Checkliste</span>
-            </div>
-            <div className="space-y-1.5">
-              {checklistItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-2 group">
-                  <button
-                    onClick={() => toggleChecklistItem(item.id)}
-                    className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                      item.checked
-                        ? 'bg-primary-600 border-primary-600 text-white'
-                        : 'border-slate-300 dark:border-slate-600'
-                    }`
-                    }
-                  >
-                    {item.checked && <Check size={12} strokeWidth={3} />}
-                  </button>
-                  <span
-                    className={`flex-1 text-sm ${
-                      item.checked
-                        ? 'line-through text-slate-400 dark:text-slate-600'
-                        : 'text-slate-700 dark:text-slate-200'
-                    }`}
-                  >
-                    {item.text}
-                  </span>
-                  <button
-                    onClick={() => deleteChecklistItem(item.id)}
-                    className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <div className="shrink-0 w-5 h-5" />
-                <input
-                  type="text"
-                  value={newChecklistItem}
-                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newChecklistItem.trim()) {
-                      e.preventDefault();
-                      addChecklistItem(newChecklistItem);
-                      setNewChecklistItem('');
-                    }
-                  }}
-                  placeholder="Listeneintrag hinzufügen…"
-                  className="flex-1 h-9 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-primary-500"
-                />
-                <button
-                  onClick={() => {
-                    if (newChecklistItem.trim()) {
-                      addChecklistItem(newChecklistItem);
-                      setNewChecklistItem('');
-                    }
-                  }}
-                  className="shrink-0 w-9 h-9 rounded-lg bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 flex items-center justify-center"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
         )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

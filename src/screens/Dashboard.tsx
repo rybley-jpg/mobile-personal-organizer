@@ -165,8 +165,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const importantTasks = useMemo(() => {
     const today = todayISO();
     return tasksApi.tasks
-      .filter((t) => t.status === 'offen' && t.priority === 'hoch' && t.due_date !== null && t.due_date <= today)
-      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
+      .filter((t) => t.status === 'offen' && (t.priority === 'hoch' || (t.due_date !== null && t.due_date <= today)))
+      .sort((a, b) => {
+        if (a.due_date === null || b.due_date === null) return a.due_date === null ? (b.due_date === null ? 0 : 1) : -1;
+        return a.due_date.localeCompare(b.due_date);
+      });
   }, [tasksApi.tasks]);
 
   useEffect(() => {
@@ -342,12 +345,17 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         ) : (
           <ul className="space-y-2">
             {importantTasks.map((task) => {
-              const overdue = (task.due_date ?? '') < todayISO();
+              const overdue = task.due_date !== null && task.due_date < todayISO();
+              const label = task.due_date === null
+                ? 'Wichtig'
+                : overdue
+                  ? `Überfällig · ${formatDateShort(task.due_date)}`
+                  : task.due_date === todayISO() ? 'Heute fällig' : formatDateShort(task.due_date);
               return (
                 <li key={task.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{task.title}</span>
                   <span className={`shrink-0 text-xs ${overdue ? 'font-semibold text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {overdue ? `Überfällig · ${formatDateShort(task.due_date!)}` : 'Heute fällig'}
+                    {label}
                   </span>
                 </li>
               );

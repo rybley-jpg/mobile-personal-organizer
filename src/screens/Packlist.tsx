@@ -4,7 +4,7 @@ import { RemovableItem } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { usePacklist } from '@/hooks/usePacklist';
 import { Sheet } from '@/components/ui/Sheet';
-import { PACKLIST_CATEGORIES, PacklistItem } from '@/types';
+import { PACKLIST_CATEGORIES, PACKLIST_SUGGESTIONS, PacklistItem } from '@/types';
 
 export function Packlist({ onClose }: { onClose: () => void }) {
   const { tripsApi } = useOrganizer();
@@ -33,6 +33,12 @@ export function Packlist({ onClose }: { onClose: () => void }) {
     await addItem({ label: newLabel.trim(), category: newCategory, trip_id: tripFilter, checked: false, sort_index: items.length });
     setNewLabel('');
     setNewCategory(null);
+  };
+
+  const existingLabels = useMemo(() => new Set(items.map((i) => i.label.trim().toLowerCase())), [items]);
+
+  const handleSuggestion = async (label: string, category: string) => {
+    await addItem({ label, category, trip_id: tripFilter, checked: false, sort_index: items.length });
   };
 
   return (
@@ -102,6 +108,30 @@ export function Packlist({ onClose }: { onClose: () => void }) {
           >
             <Plus size={18} />
           </button>
+        </div>
+
+        {/* Standard suggestions */}
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Vorschläge</p>
+          {Object.entries(PACKLIST_SUGGESTIONS).map(([cat, labels]) => {
+            const open = labels.filter((l) => !existingLabels.has(l.toLowerCase()));
+            if (open.length === 0) return null;
+            return (
+              <div key={cat} className="flex flex-wrap items-center gap-1.5">
+                <span className="w-full text-[11px] text-slate-400 dark:text-slate-500">{cat}</span>
+                {open.map((label) => (
+                  <button
+                    key={label}
+                    onClick={() => handleSuggestion(label, cat)}
+                    className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:border-primary-400 active:scale-95 transition-all"
+                  >
+                    <Plus size={12} className="text-primary-600 dark:text-primary-400" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* Items grouped by category */}

@@ -54,7 +54,7 @@ export function More({ onNavigate, onOpenSearch }: MoreProps) {
         <section>
           <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Reise-Funktionen</h2>
           <div className="space-y-2">
-            <NavRow icon={<CheckSquare size={18} />} title="Aufgaben" subtitle="Checklisten & Erinnerungen" onClick={() => onNavigate('aufgaben')} />
+            <NavRow icon={<CheckSquare size={18} />} title="Aufgaben" subtitle="Wichtige Aufgaben & Fälligkeiten" onClick={() => onNavigate('aufgaben')} />
             <NavRow icon={<Backpack size={18} />} title="Packlisten" subtitle="Alles für die Reise eingepackt" onClick={() => setPacklistOpen(true)} />
             <NavRow icon={<Users size={18} />} title="Kontakte" subtitle="Reisekontakte & Adressen" onClick={() => onNavigate('kontakte')} />
             <NavRow icon={<Calculator size={18} />} title="Währungsrechner" subtitle="Aktuelle Wechselkurse" onClick={() => setCurrencyOpen(true)} />

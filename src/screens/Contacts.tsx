@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Plus, Phone, Mail, Building2, Search as SearchIcon, ContactRound, ArrowLeft } from 'lucide-react';
-import { useDeleteRequest } from '@/components/RemovableItem';
+import { Plus, Phone, Mail, Building2, Search as SearchIcon, ContactRound, ArrowLeft, MapPin } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Contact } from '@/types';
 import { Sheet } from '@/components/ui/Sheet';
@@ -50,8 +50,8 @@ export function Contacts({ onOpenSearch, onBack }: ContactsProps) {
       ) : (
         <div className="space-y-2">
           {sorted.map((contact) => (
+            <RemovableItem key={contact.id} label={contact.name} onDelete={() => contactsApi.deleteContact(contact.id)}>
             <button
-              key={contact.id}
               onClick={() => setSelected(contact)}
               className="w-full text-left flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
             >
@@ -77,6 +77,7 @@ export function Contacts({ onOpenSearch, onBack }: ContactsProps) {
                 </a>
               )}
             </button>
+            </RemovableItem>
           ))}
         </div>
       )}
@@ -96,12 +97,6 @@ export function Contacts({ onOpenSearch, onBack }: ContactsProps) {
 }
 
 function ContactDetail({ contact, onClose }: { contact: Contact; onClose: () => void }) {
-  const { contactsApi } = useOrganizer();
-  const handleDelete = async () => {
-    await contactsApi.deleteContact(contact.id);
-    onClose();
-  };
-  const { requestDelete, confirmDialog } = useDeleteRequest(contact.name, handleDelete);
   return (
     <Sheet open={!!contact} onClose={onClose} title={contact.name}>
       <div className="space-y-4">
@@ -144,6 +139,22 @@ function ContactDetail({ contact, onClose }: { contact: Contact; onClose: () => 
           )}
         </div>
 
+        {contact.address && (
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contact.address)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3.5"
+          >
+            <span className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center shrink-0"><MapPin size={18} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-amber-700 dark:text-amber-300">Adresse</p>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{contact.address}</p>
+            </div>
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">In Karte öffnen</span>
+          </a>
+        )}
+
         {contact.notes && (
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-sm text-slate-600 dark:text-slate-300">
             {contact.notes}
@@ -154,21 +165,14 @@ function ContactDetail({ contact, onClose }: { contact: Contact; onClose: () => 
           <div className="text-xs text-slate-400 dark:text-slate-500">Kategorie: {contact.category}</div>
         )}
 
-        <button
-          onClick={requestDelete}
-          className="w-full h-11 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-medium text-sm flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-        >
-          Kontakt löschen
-        </button>
       </div>
-      {confirmDialog}
     </Sheet>
   );
 }
 
 function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { contactsApi } = useOrganizer();
-  const [form, setForm] = useState({ name: '', organization: '', phone: '', phone_alt: '', email: '', category: '', notes: '' });
+  const [form, setForm] = useState({ name: '', organization: '', phone: '', phone_alt: '', email: '', address: '', category: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
 
@@ -182,10 +186,11 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
         phone: form.phone.trim() || null,
         phone_alt: form.phone_alt.trim() || null,
         email: form.email.trim() || null,
+        address: form.address.trim() || null,
         category: form.category.trim() || null,
         notes: form.notes.trim() || null,
       });
-      setForm({ name: '', organization: '', phone: '', phone_alt: '', email: '', category: '', notes: '' });
+      setForm({ name: '', organization: '', phone: '', phone_alt: '', email: '', address: '', category: '', notes: '' });
       onClose();
     } finally {
       setSaving(false);
@@ -216,6 +221,7 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
       phone: c.phoneNumbers?.[0]?.value ?? '',
       phone_alt: c.phoneNumbers?.[1]?.value ?? '',
       email: c.emails?.[0]?.value ?? '',
+      address: c.addresses?.[0]?.formatted ?? '',
       category: '',
       notes: '',
     });
@@ -248,6 +254,7 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
         <div className="h-px bg-slate-100 dark:bg-slate-800" />
         <FormField label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} autoFocus />
         <FormField label="Organisation" value={form.organization} onChange={(v) => setForm({ ...form, organization: v })} />
+        <FormField label="Adresse" value={form.address} onChange={(v) => setForm({ ...form, address: v })} textarea />
         <FormField label="Telefon" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} type="tel" />
         <FormField label="Alternative Telefonnummer" value={form.phone_alt} onChange={(v) => setForm({ ...form, phone_alt: v })} type="tel" />
         <FormField label="E-Mail" value={form.email} onChange={(v) => setForm({ ...form, email: v })} type="email" />
