@@ -140,22 +140,14 @@ export interface TaskChecklistItem {
   created_at: string;
 }
 
-export interface TravelChecklistItem {
-  id: string;
-  trip_id: string;
-  label: string;
-  checked: boolean;
-  is_custom: boolean;
-  sort_index: number;
-  deadline: string | null;
-  created_at: string;
-}
-
 export interface WalletDocument {
   id: string;
-  trip_id: string;
+  trip_id: string | null;
   label: string;
   doc_type: string;
+  doc_number: string | null;
+  expires_on: string | null;
+  notes: string | null;
   file_name: string;
   file_path: string;
   file_type: string | null;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useBackButton } from '@/hooks/useBackButton';
@@ -78,60 +78,71 @@ const EMPTY_DRAFT: SegmentDraft = {
   seat_number: '',
 };
 
+function segmentDraftKey(tripId: string, segmentId: string | null): string {
+  return `klarly.segmentDraft.${tripId}.${segmentId ?? 'new'}`;
+}
+
+function readStoredDraft(key: string): SegmentDraft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...EMPTY_DRAFT, ...(JSON.parse(raw) as Partial<SegmentDraft>) } : null;
+  } catch {
+    return null;
+  }
+}
+
+function draftFromSegment(segment: TripSegment): SegmentDraft {
+  return {
+    segment_type: segment.segment_type,
+    title: segment.title ?? '',
+    from_location: segment.from_location ?? '',
+    to_location: segment.to_location ?? '',
+    from_airport_code: segment.from_airport_code ?? '',
+    to_airport_code: segment.to_airport_code ?? '',
+    departure_date: segment.departure_date ?? '',
+    departure_time: segment.departure_time ?? '',
+    arrival_date: segment.arrival_date ?? '',
+    arrival_time: segment.arrival_time ?? '',
+    airline: segment.airline ?? '',
+    flight_number: segment.flight_number ?? '',
+    booking_number: segment.booking_number ?? '',
+    terminal: segment.terminal ?? '',
+    gate: segment.gate ?? '',
+    seat: segment.seat ?? '',
+    baggage_info: segment.baggage_info ?? '',
+    travel_class: segment.travel_class ?? '',
+    carry_on_baggage: segment.carry_on_baggage ?? '',
+    checked_baggage: segment.checked_baggage ?? '',
+    segment_notes: segment.segment_notes ?? '',
+    price_amount: segment.price_amount != null ? String(segment.price_amount) : '',
+    price_currency: segment.price_currency ?? 'EUR',
+    order_index: segment.order_index,
+    train_number: segment.train_number ?? '',
+    train_operator: segment.train_operator ?? '',
+    platform: segment.platform ?? '',
+    wagon: segment.wagon ?? '',
+    seat_number: segment.seat_number ?? '',
+  };
+}
+
 export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorProps) {
   const { tripsApi } = useOrganizer();
-  const [draft, setDraft] = useState<SegmentDraft>(EMPTY_DRAFT);
+  const draftKey = segmentDraftKey(tripId, segment?.id ?? null);
+  const [draft, setDraft] = useState<SegmentDraft>(() => {
+    const stored = readStoredDraft(draftKey);
+    if (stored) return stored;
+    if (segment) return draftFromSegment(segment);
+    const existingCount = tripsApi.segments.filter((s) => s.trip_id === tripId).length;
+    return { ...EMPTY_DRAFT, order_index: existingCount };
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const initializedRef = useRef(false);
 
   useBackButton(open, onClose);
 
   useEffect(() => {
-    if (!open) {
-      initializedRef.current = false;
-      return;
-    }
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    setError(null);
-    if (segment) {
-      setDraft({
-        segment_type: segment.segment_type,
-        title: segment.title ?? '',
-        from_location: segment.from_location ?? '',
-        to_location: segment.to_location ?? '',
-        from_airport_code: segment.from_airport_code ?? '',
-        to_airport_code: segment.to_airport_code ?? '',
-        departure_date: segment.departure_date ?? '',
-        departure_time: segment.departure_time ?? '',
-        arrival_date: segment.arrival_date ?? '',
-        arrival_time: segment.arrival_time ?? '',
-        airline: segment.airline ?? '',
-        flight_number: segment.flight_number ?? '',
-        booking_number: segment.booking_number ?? '',
-        terminal: segment.terminal ?? '',
-        gate: segment.gate ?? '',
-        seat: segment.seat ?? '',
-        baggage_info: segment.baggage_info ?? '',
-        travel_class: segment.travel_class ?? '',
-        carry_on_baggage: segment.carry_on_baggage ?? '',
-        checked_baggage: segment.checked_baggage ?? '',
-        segment_notes: segment.segment_notes ?? '',
-        price_amount: segment.price_amount != null ? String(segment.price_amount) : '',
-        price_currency: segment.price_currency ?? 'EUR',
-        order_index: segment.order_index,
-        train_number: segment.train_number ?? '',
-        train_operator: segment.train_operator ?? '',
-        platform: segment.platform ?? '',
-        wagon: segment.wagon ?? '',
-        seat_number: segment.seat_number ?? '',
-      });
-    } else {
-      const existingSegs = tripsApi.segments.filter((s) => s.trip_id === tripId);
-      setDraft({ ...EMPTY_DRAFT, order_index: existingSegs.length });
-    }
-  }, [open, segment, tripId, tripsApi.segments]);
+    if (open) localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [open, draft, draftKey]);
 
   const update = <K extends keyof SegmentDraft>(key: K, value: SegmentDraft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -182,6 +193,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
       } else {
         await tripsApi.addSegment(payload);
       }
+      localStorage.removeItem(draftKey);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.');
@@ -195,6 +207,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
     setSaving(true);
     try {
       await tripsApi.deleteSegment(segment.id);
+      localStorage.removeItem(draftKey);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.');

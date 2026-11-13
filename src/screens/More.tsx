@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RemovableItem } from '@/components/RemovableItem';
-import { Moon, Sun, Plus, Tag, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin, CheckSquare, Backpack, Phone, AlertTriangle, Users } from 'lucide-react';
+import { Moon, Sun, Plus, Tag, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin, CheckSquare, Backpack, Phone, Users } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +8,6 @@ import { CategoryIcon } from '@/components/CategoryIcon';
 import { Sheet } from '@/components/ui/Sheet';
 import { CurrencyConverter } from '@/screens/CurrencyConverter';
 import { Packlist } from '@/screens/Packlist';
-import { EmergencyInfoScreen } from '@/screens/EmergencyInfo';
 
 const ICON_OPTIONS = ['tag', 'home', 'briefcase', 'heart', 'plane', 'phone', 'wallet', 'calendar', 'shopping-cart', 'alert-triangle'];
 const COLOR_OPTIONS = ['#64748b', '#2563eb', '#ec4899', '#0ea5e9', '#f59e0b', '#10b981', '#06b6d4', '#f97316', '#ef4444', '#8b5cf6'];
@@ -25,7 +24,6 @@ export function More({ onNavigate, onOpenSearch }: MoreProps) {
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [packlistOpen, setPacklistOpen] = useState(false);
-  const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -59,7 +57,6 @@ export function More({ onNavigate, onOpenSearch }: MoreProps) {
             <NavRow icon={<CheckSquare size={18} />} title="Aufgaben" subtitle="Checklisten & Erinnerungen" onClick={() => onNavigate('aufgaben')} />
             <NavRow icon={<Backpack size={18} />} title="Packlisten" subtitle="Alles für die Reise eingepackt" onClick={() => setPacklistOpen(true)} />
             <NavRow icon={<Users size={18} />} title="Kontakte" subtitle="Reisekontakte & Adressen" onClick={() => onNavigate('kontakte')} />
-            <NavRow icon={<AlertTriangle size={18} />} title="Notfallinformationen" subtitle="Notfallkontakte & medizinische Infos" onClick={() => setEmergencyOpen(true)} />
             <NavRow icon={<Calculator size={18} />} title="Währungsrechner" subtitle="Aktuelle Wechselkurse" onClick={() => setCurrencyOpen(true)} />
           </div>
         </section>
@@ -234,7 +231,6 @@ export function More({ onNavigate, onOpenSearch }: MoreProps) {
       <AddCategorySheet open={addCatOpen} onClose={() => setAddCatOpen(false)} />
       {currencyOpen && <CurrencyConverter onClose={() => setCurrencyOpen(false)} />}
       {packlistOpen && <Packlist onClose={() => setPacklistOpen(false)} />}
-      {emergencyOpen && <EmergencyInfoScreen onClose={() => setEmergencyOpen(false)} />}
     </div>
   );
 }

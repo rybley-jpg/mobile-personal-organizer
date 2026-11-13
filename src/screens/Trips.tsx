@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useBackButton } from '@/hooks/useBackButton';
-import { useDeleteRequest } from '@/components/RemovableItem';
-import { Plus, Plane, Hotel, Car, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { RemovableItem, useDeleteRequest } from '@/components/RemovableItem';
+import { Plus, Plane, Hotel, Car, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Trip, TripSegment, SegmentType } from '@/types';
 import { SEGMENT_TYPE_LABELS } from '@/types';
@@ -11,8 +11,6 @@ import { FlightStatusBadge } from '@/components/FlightStatusBadge';
 import { TrainDetail } from '@/components/TrainDetail';
 import { TrainStatusBadge } from '@/components/TrainStatusBadge';
 import { SegmentEditor } from '@/components/SegmentEditor';
-import { TravelChecklist } from '@/components/TravelChecklist';
-import { WalletPanel } from '@/components/WalletPanel';
 import { formatRelativeDate, formatTime, formatDateShort, todayISO, combineDateTime } from '@/lib/dateUtils';
 import { generateSuggestedFlightReminders, generateSuggestedTrainReminders } from '@/lib/tripReminders';
 import { computeTripOverallStatus, computeConnections, getSegmentTransportStatus, formatDuration } from '@/lib/travelStatus';
@@ -24,25 +22,77 @@ const SEGMENT_ICON: Record<SegmentType, typeof Plane> = {
   bahn: Train,
 };
 
+function tripEndDate(tripSegs: TripSegment[]): string | null {
+  return tripSegs.reduce<string | null>((latest, s) => {
+    const d = s.arrival_date ?? s.departure_date;
+    if (!d) return latest;
+    return latest === null || d > latest ? d : latest;
+  }, null);
+}
+
 export function Trips() {
   const { tripsApi } = useOrganizer();
   const { trips, segments } = tripsApi;
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [completedOpen, setCompletedOpen] = useState(false);
 
-  const sortedTrips = useMemo(() => {
+  const { activeTrips, completedTrips } = useMemo(() => {
     const today = todayISO();
-    return [...trips].sort((a, b) => {
-      const aSegs = segments.filter((s) => s.trip_id === a.id);
-      const bSegs = segments.filter((s) => s.trip_id === b.id);
-      const aDate = aSegs.sort((x, y) => x.order_index - y.order_index)[0]?.departure_date ?? '9999';
-      const bDate = bSegs.sort((x, y) => x.order_index - y.order_index)[0]?.departure_date ?? '9999';
-      const aUpcoming = aDate >= today ? 0 : 1;
-      const bUpcoming = bDate >= today ? 0 : 1;
-      if (aUpcoming !== bUpcoming) return aUpcoming - bUpcoming;
-      return aDate.localeCompare(bDate);
+    const withDates = trips.map((trip) => {
+      const tripSegs = segments.filter((s) => s.trip_id === trip.id).sort((a, b) => a.order_index - b.order_index);
+      return { trip, firstDate: tripSegs[0]?.departure_date ?? null, endDate: tripEndDate(tripSegs) };
     });
+    const active = withDates
+      .filter((t) => !(t.endDate && t.endDate < today))
+      .sort((a, b) => {
+        const aDate = a.firstDate ?? '9999';
+        const bDate = b.firstDate ?? '9999';
+        const aUpcoming = aDate >= today ? 0 : 1;
+        const bUpcoming = bDate >= today ? 0 : 1;
+        if (aUpcoming !== bUpcoming) return aUpcoming - bUpcoming;
+        return aDate.localeCompare(bDate);
+      })
+      .map((t) => t.trip);
+    const completed = withDates
+      .filter((t) => t.endDate && t.endDate < today)
+      .sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? ''))
+      .map((t) => t.trip);
+    return { activeTrips: active, completedTrips: completed };
   }, [trips, segments]);
+
+  const renderTripCard = (trip: Trip) => {
+    const tripSegs = segments.filter((s) => s.trip_id === trip.id).sort((a, b) => a.order_index - b.order_index);
+    const firstSeg = tripSegs[0];
+    const isUpcoming = firstSeg?.departure_date && firstSeg.departure_date >= todayISO();
+    return (
+      <RemovableItem key={trip.id} label={trip.name} onDelete={() => tripsApi.deleteTrip(trip.id)}>
+        <button
+          onClick={() => setSelectedTrip(trip)}
+          className="w-full text-left rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+        >
+          <div className="flex items-start justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white truncate">{trip.name}</h3>
+                {isUpcoming && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-300">Geplant</span>}
+              </div>
+              {trip.destination && <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5"><MapPin size={13} /> {trip.destination}</p>}
+            </div>
+            <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 shrink-0" />
+          </div>
+          {firstSeg && (
+            <div className="mt-2.5 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1"><Calendar size={12} /> {firstSeg.departure_date && formatRelativeDate(firstSeg.departure_date)}</span>
+              {firstSeg.from_location && firstSeg.to_location && (
+                <span className="flex items-center gap-1">{firstSeg.from_location} → {firstSeg.to_location}</span>
+              )}
+            </div>
+          )}
+        </button>
+      </RemovableItem>
+    );
+  };
 
   const selectedTripLive = useMemo(
     () => trips.find((t) => t.id === selectedTrip?.id) ?? null,
@@ -61,44 +111,27 @@ export function Trips() {
         </button>
       </header>
 
-      {sortedTrips.length === 0 ? (
+      {activeTrips.length === 0 && completedTrips.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center">
           <Plane size={32} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
           <p className="text-sm text-slate-400 dark:text-slate-500">Noch keine Reisen angelegt.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {sortedTrips.map((trip) => {
-            const tripSegs = segments.filter((s) => s.trip_id === trip.id).sort((a, b) => a.order_index - b.order_index);
-            const firstSeg = tripSegs[0];
-            const isUpcoming = firstSeg?.departure_date && firstSeg.departure_date >= todayISO();
-            return (
+          {activeTrips.map(renderTripCard)}
+          {completedTrips.length > 0 && (
+            <div className="pt-2">
               <button
-                key={trip.id}
-                onClick={() => setSelectedTrip(trip)}
-                className="w-full text-left rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+                onClick={() => setCompletedOpen((open) => !open)}
+                className="w-full h-11 flex items-center justify-between px-1 text-sm font-semibold text-slate-600 dark:text-slate-300"
+                aria-expanded={completedOpen}
               >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-semibold text-slate-900 dark:text-white truncate">{trip.name}</h3>
-                      {isUpcoming && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-300">Geplant</span>}
-                    </div>
-                    {trip.destination && <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5"><MapPin size={13} /> {trip.destination}</p>}
-                  </div>
-                  <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                </div>
-                {firstSeg && (
-                  <div className="mt-2.5 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="flex items-center gap-1"><Calendar size={12} /> {firstSeg.departure_date && formatRelativeDate(firstSeg.departure_date)}</span>
-                    {firstSeg.from_location && firstSeg.to_location && (
-                      <span className="flex items-center gap-1">{firstSeg.from_location} → {firstSeg.to_location}</span>
-                    )}
-                  </div>
-                )}
+                <span>Abgeschlossene Reisen ({completedTrips.length})</span>
+                {completedOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </button>
-            );
-          })}
+              {completedOpen && <div className="space-y-3 mt-1">{completedTrips.map(renderTripCard)}</div>}
+            </div>
+          )}
         </div>
       )}
 
@@ -249,7 +282,8 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
                 const Icon = SEGMENT_ICON[seg.segment_type];
                 const isTransport = seg.segment_type === 'flug' || seg.segment_type === 'bahn';
                 return (
-                  <div key={seg.id} className="relative">
+                  <RemovableItem key={seg.id} label={seg.title || SEGMENT_TYPE_LABELS[seg.segment_type]} onDelete={() => tripsApi.deleteSegment(seg.id)}>
+                  <div className="relative">
                     <span className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-primary-600 text-white flex items-center justify-center ring-4 ring-white dark:ring-slate-900">
                       <Icon size={11} />
                     </span>
@@ -355,18 +389,13 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
                       </button>
                     </div>
                   </div>
+                  </RemovableItem>
                 );
               })}
             </div>
           </div>
           )}
         </div>
-
-        {/* Travel Checklist */}
-        <TravelChecklist tripId={trip.id} />
-
-        {/* Wallet */}
-        <WalletPanel tripId={trip.id} />
 
         {/* Cost summary */}
         {tripSegs.some((s) => s.price_amount != null) && (
