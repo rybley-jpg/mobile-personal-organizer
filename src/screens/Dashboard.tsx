@@ -5,8 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { FlightStatusBadge } from '@/components/FlightStatusBadge';
 import { FlightDetail } from '@/components/FlightDetail';
 import { formatRelativeDate, formatTime, formatDateShort, todayISO } from '@/lib/dateUtils';
-import { fetchAndStoreFlightStatus, shouldRefreshFlightStatus } from '@/lib/flightApi';
-import { supabase } from '@/lib/supabase';
+import { canShowRefreshButton, fetchAndStoreFlightStatus, flightLiveLinks, flightRefreshMessage } from '@/lib/flightApi';
 import { getCountryISO } from '@/lib/countryFlags';
 import { getAirportTimezone, getCityTimezone, formatTimeInZone } from '@/lib/timezoneData';
 import { isOnline } from '@/lib/permissions';
@@ -91,12 +90,12 @@ const CLOCK_COLOR_PRESETS = [
 ];
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { tripsApi } = useOrganizer();
+  const { tripsApi, tasksApi } = useOrganizer();
   const { user } = useAuth();
   const allSegments = tripsApi.segments;
   const [flightDetailSegment, setFlightDetailSegment] = useState<typeof allSegments[number] | null>(null);
   const [refreshingFlight, setRefreshingFlight] = useState(false);
-  const [overdueChecklistItems, setOverdueChecklistItems] = useState<{ label: string }[]>([]);
+  const [flightMessage, setFlightMessage] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [clockStyle, setClockStyle] = useState<ClockStyle>('analog');
   const [homeClockColor, setHomeClockColor] = useState<string>(() => localStorage.getItem('klarly-clock-home-color') || '#3b82f6');
@@ -163,24 +162,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     return { days, hours, minutes, started: false };
   }, [nextTrip, now]);
 
-  useEffect(() => {
-    if (!nextTrip) { setOverdueChecklistItems([]); return; }
-    supabase
-      .from('travel_checklists')
-      .select('label,checked,deadline')
-      .eq('trip_id', nextTrip.trip.id)
-      .eq('checked', false)
-      .order('sort_index', { ascending: true })
-      .then(({ data }) => {
-        if (!data) { setOverdueChecklistItems([]); return; }
-        const today = todayISO();
-        setOverdueChecklistItems(
-          data
-            .filter((d) => d.deadline && d.deadline < today)
-            .map((d) => ({ label: d.label }))
-        );
-      });
-  }, [nextTrip]);
+  const importantTasks = useMemo(() => {
+    const today = todayISO();
+    return tasksApi.tasks
+      .filter((t) => t.status === 'offen' && t.priority === 'hoch' && t.due_date !== null && t.due_date <= today)
+      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
+  }, [tasksApi.tasks]);
 
   useEffect(() => {
     const update = () => setOnline(isOnline());
@@ -257,17 +244,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const handleRefreshFlight = async () => {
     if (!nextFlight) return;
     setRefreshingFlight(true);
+    setFlightMessage(null);
     try {
-      await fetchAndStoreFlightStatus(nextFlight, tripsApi.updateSegment);
+      const result = await fetchAndStoreFlightStatus(nextFlight, tripsApi.updateSegment);
+      setFlightMessage(flightRefreshMessage(result));
     } catch {
-      // silent
+      setFlightMessage('Flugstatus konnte nicht abgerufen werden.');
     } finally {
       setRefreshingFlight(false);
     }
   };
 
-  const canRefreshFlight = nextFlight && shouldRefreshFlightStatus(nextFlight);
-  const hasOverdueItems = overdueChecklistItems.length > 0;
+  const canRefreshFlight = nextFlight && canShowRefreshButton(nextFlight);
 
   return (
     <div className="px-4 pt-6 pb-[calc(112px+env(safe-area-inset-bottom))] space-y-6">
@@ -338,30 +326,35 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             )}
           </div>
 
-          {/* Overdue checklist items only */}
-          {hasOverdueItems && (
-            <div className="mt-4 pt-4 border-t border-white/20 relative z-10 space-y-1.5">
-              <p className="text-xs font-bold text-red-300 flex items-center gap-1.5">
-                <AlertCircle size={13} /> Überfällige Checkliste:
-              </p>
-              {overdueChecklistItems.map((item) => (
-                <div key={item.label} className="flex items-center gap-2 text-sm text-red-300 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!hasOverdueItems && (
-            <div className="mt-4 pt-4 border-t border-white/20 relative z-10">
-              <p className="text-sm text-white/85 flex items-center gap-1.5">
-                <CheckCircle2 size={15} /> Du bist startklar!
-              </p>
-            </div>
-          )}
         </div>
       )}
+
+      {/* Overdue and important tasks */}
+      <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertCircle size={16} className={importantTasks.some((t) => t.due_date !== null && t.due_date < todayISO()) ? 'text-red-500' : 'text-amber-500'} />
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Überfällig / wichtig</h2>
+        </div>
+        {importantTasks.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-emerald-500" /> Nichts überfällig
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {importantTasks.map((task) => {
+              const overdue = (task.due_date ?? '') < todayISO();
+              return (
+                <li key={task.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{task.title}</span>
+                  <span className={`shrink-0 text-xs ${overdue ? 'font-semibold text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {overdue ? `Überfällig · ${formatDateShort(task.due_date!)}` : 'Heute fällig'}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* Flight card — airline, flight number, live tracking */}
       {nextFlight && (
@@ -401,34 +394,57 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               )}
             </div>
           </button>
-          {nextFlight.gate_changed && (
+          {nextFlight.last_flight_status === 'cancelled' && (
+            <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-1.5">
+              <AlertCircle size={12} /> Flug wurde abgesagt.
+            </div>
+          )}
+          {nextFlight.last_flight_status === 'diverted' && (
+            <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-1.5">
+              <AlertCircle size={12} /> Flug wurde umgeleitet.
+            </div>
+          )}
+          {nextFlight.gate_changed && nextFlight.previous_gate && nextFlight.last_known_gate && (
             <div className="mt-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-xs text-orange-700 dark:text-orange-300 flex items-center gap-1.5">
               <AlertCircle size={12} /> Gate-Wechsel: {nextFlight.previous_gate} → {nextFlight.last_known_gate}
             </div>
           )}
-          {nextFlight.last_flight_status === 'delayed' && nextFlight.delay_minutes && (
+          {nextFlight.delay_minutes !== null && nextFlight.delay_minutes >= 5 && nextFlight.last_flight_status !== 'cancelled' && (
             <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
               <AlertCircle size={12} /> Verspätet: +{nextFlight.delay_minutes} Minuten
             </div>
           )}
-          {/* Live tracking button */}
-          <button
-            onClick={() => onNavigate('reise')}
-            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white py-2.5 text-sm font-medium transition-colors"
-          >
-            <Navigation size={15} /> Live-Tracking
-          </button>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <a
+              href={flightLiveLinks(nextFlight.flight_number)?.flightaware ?? ''}
+              target="_blank"
+              rel="noopener"
+              className="flex items-center justify-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white py-2.5 text-sm font-medium transition-colors"
+            >
+              <Navigation size={15} /> Live-Karte öffnen
+            </a>
+            <a
+              href={flightLiveLinks(nextFlight.flight_number)?.flightradar24 ?? ''}
+              target="_blank"
+              rel="noopener"
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-2.5 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Flightradar24
+            </a>
+          </div>
           {canRefreshFlight && (
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">Live-Status verfügbar</span>
-              <span
-                role="button"
-                tabIndex={0}
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 min-w-0">
+                {flightMessage ?? 'Live-Status verfügbar'}
+              </span>
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleRefreshFlight(); }}
-                className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400"
+                disabled={refreshingFlight}
+                className="shrink-0 flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400 disabled:opacity-50"
               >
                 <RefreshCw size={11} className={refreshingFlight ? 'animate-spin' : ''} /> Aktualisieren
-              </span>
+              </button>
             </div>
           )}
         </div>

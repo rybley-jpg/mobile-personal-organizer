@@ -6,7 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { FlightStatusBadge, GateChangeAlert, DelayInfo, LiveUpdateInfo } from '@/components/FlightStatusBadge';
 import { findAirlineByName, Airline } from '@/lib/airlineData';
 import { findAirportByIata } from '@/lib/airportData';
-import { fetchAndStoreFlightStatus, isFlightApiConfigured, shouldRefreshFlightStatus } from '@/lib/flightApi';
+import { canShowRefreshButton, fetchAndStoreFlightStatus, flightLiveLinks, flightRefreshMessage, shouldRefreshFlightStatus } from '@/lib/flightApi';
 import { formatDateShort, formatTime } from '@/lib/dateUtils';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useFlightNotifications } from '@/hooks/useFlightNotifications';
@@ -35,11 +35,7 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
     setLiveError(null);
     try {
       const result = await fetchAndStoreFlightStatus(segment, tripsApi.updateSegment);
-      if (!result && isFlightApiConfigured()) {
-        setLiveError('Keine aktuellen Flugdaten verfügbar.');
-      } else if (!result && !isFlightApiConfigured()) {
-        setLiveError('Live-Flugstatus momentan nicht verfügbar.');
-      }
+      if (!result.ok) setLiveError(flightRefreshMessage(result));
     } catch {
       setLiveError('Live-Daten konnten nicht abgerufen werden.');
     } finally {
@@ -178,7 +174,11 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
               </div>
             )}
 
-            <LiveUpdateInfo lastUpdate={segment.last_flight_update} onRefresh={refreshStatus} loading={liveLoading} />
+            <LiveUpdateInfo
+              lastUpdate={segment.last_flight_update}
+              onRefresh={canShowRefreshButton(segment) ? refreshStatus : undefined}
+              loading={liveLoading}
+            />
           </div>
 
           {/* Flight Notifications */}
@@ -340,7 +340,7 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
             <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">Live-Verfolgung</h3>
               <a
-                href={`https://www.flightaware.com/live/flight/${encodeURIComponent(segment.flight_number)}`}
+                href={flightLiveLinks(segment.flight_number)?.flightaware ?? ''}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full h-10 rounded-xl bg-primary-600 text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-primary-700 transition-colors"

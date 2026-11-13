@@ -1,0 +1,17 @@
+{
+  "projectId": "70208712",
+  "functions": {
+    "flight-status": {
+      "hasChanged": false,
+      "hash": "8136e70065caf950134d56d03d1ea4da9578da2f6222af4baadd8337888fa62e"
+    },
+    "rail-status": {
+      "hasChanged": false,
+      "hash": "7283d169c0fc173adbfdcbe08e7bd2513c123bf7ea7b08639d66338d854c6c43"
+    },
+    "reverse-geocode": {
+      "hasChanged": false,
+      "hash": "e69f755b9030325d60513f50d2a7322add5ee29a32040952bb7a06da18bb1992"
+    }
+  }
+}
