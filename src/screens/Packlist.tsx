@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2, FolderOpen, FileText, Plane, Hotel, Car, Package, CheckSquare, Square } from 'lucide-react';
+import { Plus, FolderOpen, FileText, Plane, Hotel, Car, Package, CheckSquare, Square } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { usePacklist } from '@/hooks/usePacklist';
 import { Sheet } from '@/components/ui/Sheet';
@@ -117,7 +118,8 @@ export function Packlist({ onClose }: { onClose: () => void }) {
                 <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{cat}</h3>
                 <div className="space-y-1.5">
                   {catItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3">
+                    <RemovableItem key={item.id} label={item.label} onDelete={() => deleteItem(item.id)}>
+                    <div className="flex items-center gap-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3">
                       <button
                         onClick={() => toggleItem(item.id, item.checked)}
                         className="shrink-0 text-primary-600 dark:text-primary-400"
@@ -128,14 +130,8 @@ export function Packlist({ onClose }: { onClose: () => void }) {
                       <span className={`flex-1 text-sm ${item.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}`}>
                         {item.label}
                       </span>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                        aria-label="Entfernen"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
+                    </RemovableItem>
                   ))}
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2, Wallet, TrendingDown } from 'lucide-react';
+import { Plus, Wallet, TrendingDown } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Sheet } from '@/components/ui/Sheet';
@@ -118,6 +119,7 @@ export function Expenses() {
 
 function ExpenseRow({ expense, tripName, onDelete }: { expense: TravelExpense; tripName?: string; onDelete: () => void }) {
   return (
+    <RemovableItem label={expense.label} onDelete={onDelete}>
     <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{expense.label}</p>
@@ -133,14 +135,8 @@ function ExpenseRow({ expense, tripName, onDelete }: { expense: TravelExpense; t
           <p className="text-[10px] text-slate-400">{expense.amount_eur.toFixed(2)} €</p>
         )}
       </div>
-      <button
-        onClick={onDelete}
-        className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-        aria-label="Löschen"
-      >
-        <Trash2 size={15} />
-      </button>
     </div>
+    </RemovableItem>
   );
 }
 

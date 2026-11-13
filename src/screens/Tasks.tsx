@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Search as SearchIcon, Trash2, CheckSquare, X, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
-import { SwipeableTaskItem } from '@/components/SwipeableTaskItem';
+import { TaskItem } from '@/components/TaskItem';
+import { RemovableItem } from '@/components/RemovableItem';
 import { TaskEditor } from '@/components/TaskEditor';
 import { ConfirmDialog, shouldSkipDeleteConfirm } from '@/components/ConfirmDialog';
 
@@ -233,26 +234,23 @@ export function Tasks({ onOpenSearch, onBack }: TasksProps) {
               )}
               {selectMode ? (
                 <div className="flex-1">
-                  <SwipeableTaskItem
-                    task={task}
-                    showTrip
-                    onToggle={undefined}
-                    onClick={() => toggleSelect(task.id)}
-                    onSwipeDelete={handleSwipeDelete}
-                  />
+                  <RemovableItem label={task.title} onDelete={() => handleSwipeDelete(task)}>
+                    <TaskItem task={task} showTrip onClick={() => toggleSelect(task.id)} />
+                  </RemovableItem>
                 </div>
               ) : (
                 <div className="flex-1">
-                  <SwipeableTaskItem
-                    task={task}
-                    showTrip
-                    onToggle={tasksApi.toggleTaskStatus}
-                    onClick={(t) => {
-                      setEditingTask(t);
-                      setEditorOpen(true);
-                    }}
-                    onSwipeDelete={handleSwipeDelete}
-                  />
+                  <RemovableItem label={task.title} onDelete={() => handleSwipeDelete(task)}>
+                    <TaskItem
+                      task={task}
+                      showTrip
+                      onToggle={tasksApi.toggleTaskStatus}
+                      onClick={(t) => {
+                        setEditingTask(t);
+                        setEditorOpen(true);
+                      }}
+                    />
+                  </RemovableItem>
                 </div>
               )}
             </div>

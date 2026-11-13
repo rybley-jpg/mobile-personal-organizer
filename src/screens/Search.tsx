@@ -3,6 +3,7 @@ import { Search as SearchIcon, X, Plane, Phone } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { TaskItem } from '@/components/TaskItem';
 import { formatDateShort } from '@/lib/dateUtils';
+import { useBackButton } from '@/hooks/useBackButton';
 
 interface SearchProps {
   onClose: () => void;
@@ -22,6 +23,7 @@ interface SearchResult {
 export function Search({ onClose, onNavigate }: SearchProps) {
   const { tasksApi, tripsApi, contactsApi, categoriesApi } = useOrganizer();
   const [query, setQuery] = useState('');
+  useBackButton(true, onClose);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -150,7 +152,7 @@ export function Search({ onClose, onNavigate }: SearchProps) {
                 {tripResults.map((r) => (
                   <button
                     key={r.id}
-                    onClick={() => { onNavigate('reisen'); onClose(); }}
+                    onClick={() => { onNavigate('reise'); onClose(); }}
                     className="w-full text-left flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5"
                   >
                     <span className="w-9 h-9 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0"><Plane size={16} /></span>

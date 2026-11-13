@@ -10,6 +10,9 @@ import { useAuth } from '@/context/AuthContext';
 import { isDocPinSet } from '@/lib/docSecurity';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useLocationPhotos } from '@/hooks/useLocationPhotos';
+import { RemovableItem } from '@/components/RemovableItem';
+import { useBackButton } from '@/hooks/useBackButton';
+import { getPosition, requestCamera } from '@/lib/permissions';
 
 const DOC_TYPE_ICON: Record<string, typeof FileText> = {
   'flugticket': Plane,
@@ -128,12 +131,13 @@ export function TravelDocs() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {locationPhotos.map((photo) => (
-                  <GpsPhotoCard
+                  <RemovableItem
                     key={photo.id}
-                    photo={photo}
-                    tripName={trips.find((t) => t.id === photo.trip_id)?.name}
+                    label={photo.label ?? photo.city_name ?? 'Ortsfoto'}
                     onDelete={() => deletePhoto(photo.id)}
-                  />
+                  >
+                    <GpsPhotoCard photo={photo} tripName={trips.find((t) => t.id === photo.trip_id)?.name} />
+                  </RemovableItem>
                 ))}
               </div>
             </div>
@@ -150,12 +154,9 @@ export function TravelDocs() {
           ) : (
             <div className="space-y-2">
               {filtered.map((doc) => (
-                <DocRow
-                  key={doc.id}
-                  doc={doc}
-                  tripName={trips.find((t) => t.id === doc.trip_id)?.name}
-                  onDelete={() => deleteDocument(doc.id)}
-                />
+                <RemovableItem key={doc.id} label={doc.label} onDelete={() => deleteDocument(doc.id)}>
+                  <DocRow doc={doc} tripName={trips.find((t) => t.id === doc.trip_id)?.name} />
+                </RemovableItem>
               ))}
             </div>
           )}
@@ -183,7 +184,7 @@ export function TravelDocs() {
   );
 }
 
-function DocRow({ doc, tripName, onDelete }: { doc: WalletDocument; tripName?: string; onDelete: () => void }) {
+function DocRow({ doc, tripName }: { doc: WalletDocument; tripName?: string }) {
   const Icon = DOC_TYPE_ICON[doc.doc_type] ?? FileText;
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -220,13 +221,6 @@ function DocRow({ doc, tripName, onDelete }: { doc: WalletDocument; tripName?: s
           {tripName && <span className="truncate">· {tripName}</span>}
         </div>
       </div>
-      <button
-        onClick={onDelete}
-        className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-        aria-label="Löschen"
-      >
-        <Trash2 size={15} />
-      </button>
     </div>
   );
 }
@@ -411,10 +405,9 @@ function AddDocSheet({ open, onClose, trips, onSave }: {
   );
 }
 
-function GpsPhotoCard({ photo, tripName, onDelete }: {
+function GpsPhotoCard({ photo, tripName }: {
   photo: LocationPhoto;
   tripName?: string;
-  onDelete: () => void;
 }) {
   const [imageData, setImageData] = useState<string | null>(null);
 
@@ -460,13 +453,6 @@ function GpsPhotoCard({ photo, tripName, onDelete }: {
           {tripName && <span className="text-white/70 text-[10px] truncate ml-1">{tripName}</span>}
         </div>
       </div>
-      <button
-        onClick={onDelete}
-        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Löschen"
-      >
-        <Trash2 size={14} />
-      </button>
     </div>
   );
 }
@@ -498,52 +484,46 @@ function GpsPhotoSheet({ open, onClose, trips, onSave }: {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const requestGps = useCallback(async () => {
-    if (!navigator.geolocation) {
-      setGpsState('error');
-      setError('GPS wird auf diesem Gerät nicht unterstützt.');
-      return;
-    }
     setGpsState('locating');
     setError(null);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        setCoords({ lat: latitude, lon: longitude });
-        setGpsState('found');
-        try {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          const res = await fetch(
-            `${supabaseUrl}/functions/v1/reverse-geocode?lat=${latitude}&lon=${longitude}`,
-            { headers: { Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' } },
-          );
-          if (!res.ok) throw new Error('Geocoding failed');
-          const data = await res.json();
-          setGeoInfo({ city: data.city ?? null, country: data.country ?? null });
-          if (!label) {
-            const locText = [data.city, data.country].filter(Boolean).join(', ');
-            setLabel(locText || 'Ortsfoto');
-          }
-        } catch {
-          setGeoInfo({ city: null, country: null });
-          if (!label) setLabel('Ortsfoto');
-        }
-      },
-      (err) => {
-        setGpsState('error');
-        if (err.code === err.PERMISSION_DENIED) {
-          setError('Standortzugriff verweigert. Bitte erlaube den GPS-Zugriff in den Einstellungen.');
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          setError('Standort konnte nicht ermittelt werden.');
-        } else if (err.code === err.TIMEOUT) {
-          setError('Standortermittlung hat zu lange gedauert. Versuche es erneut.');
-        } else {
-          setError('Standort konnte nicht abgerufen werden.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
-    );
+    const position = await getPosition();
+    if (!position.ok) {
+      setGpsState('error');
+      setError(position.error);
+      return;
+    }
+    const { lat, lon } = position.data;
+    setCoords({ lat, lon });
+    setGpsState('found');
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(
+        `${supabaseUrl}/functions/v1/reverse-geocode?lat=${lat}&lon=${lon}`,
+        { headers: { Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' } },
+      );
+      if (!res.ok) throw new Error('Geocoding failed');
+      const data = await res.json();
+      setGeoInfo({ city: data.city ?? null, country: data.country ?? null });
+      if (!label) {
+        const locText = [data.city, data.country].filter(Boolean).join(', ');
+        setLabel(locText || 'Ortsfoto');
+      }
+    } catch {
+      setGeoInfo({ city: null, country: null });
+      if (!label) setLabel('Ortsfoto');
+    }
   }, [label]);
+
+  const openCamera = async () => {
+    setError(null);
+    const access = await requestCamera();
+    if (!access.ok) {
+      setError(access.error);
+      return;
+    }
+    cameraInputRef.current?.click();
+  };
 
   const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -595,6 +575,8 @@ function GpsPhotoSheet({ open, onClose, trips, onSave }: {
       setSaving(false);
     }
   };
+
+  useBackButton(open, onClose);
 
   if (!open) return null;
 
@@ -667,7 +649,7 @@ function GpsPhotoSheet({ open, onClose, trips, onSave }: {
                 </div>
               ) : (
                 <button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={openCamera}
                   className="w-full h-14 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium text-sm flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   <Camera size={20} className="text-primary-500" /> Foto aufnehmen

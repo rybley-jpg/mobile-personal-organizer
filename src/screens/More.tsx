@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Moon, Sun, Plus, Tag, Trash2, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin, CheckSquare, Backpack, Phone, AlertTriangle, Users } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
+import { Moon, Sun, Plus, Tag, Info, Bell, Plane, LogOut, User, Shield, Palette, Check, Calculator, MapPin, CheckSquare, Backpack, Phone, AlertTriangle, Users } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useAuth } from '@/context/AuthContext';
@@ -197,22 +198,22 @@ export function More({ onNavigate, onOpenSearch }: MoreProps) {
             </button>
           </div>
           <div className="space-y-1.5">
-            {categoriesApi.categories.map((cat) => (
-              <div key={cat.id} className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5">
-                <CategoryIcon icon={cat.icon} color={cat.color} size={16} />
-                <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">{cat.name}</span>
-                {cat.is_default && <span className="text-[10px] text-slate-400">Standard</span>}
-                {!cat.is_default && (
-                  <button
-                    onClick={() => categoriesApi.deleteCategory(cat.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-500"
-                    aria-label="Kategorie löschen"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </div>
-            ))}
+            {categoriesApi.categories.map((cat) => {
+              const row = (
+                <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3.5">
+                  <CategoryIcon icon={cat.icon} color={cat.color} size={16} />
+                  <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">{cat.name}</span>
+                  {cat.is_default && <span className="text-[10px] text-slate-400">Standard</span>}
+                </div>
+              );
+              return cat.is_default ? (
+                <div key={cat.id}>{row}</div>
+              ) : (
+                <RemovableItem key={cat.id} label={cat.name} onDelete={() => categoriesApi.deleteCategory(cat.id)}>
+                  {row}
+                </RemovableItem>
+              );
+            })}
           </div>
         </section>
 

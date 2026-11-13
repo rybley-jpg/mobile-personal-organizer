@@ -1,4 +1,6 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useBackButton } from '@/hooks/useBackButton';
+import { useDeleteRequest } from '@/components/RemovableItem';
 import { Plus, Plane, Hotel, Car, MapPin, Phone, ExternalLink, Trash2, ChevronRight, Clock, Calendar, Pencil, Wallet, Train, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Trip, TripSegment, SegmentType } from '@/types';
@@ -118,20 +120,13 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
   const [editingSeg, setEditingSeg] = useState<TripSegment | null>(null);
   const [editTripOpen, setEditTripOpen] = useState(false);
 
-  const handleClose = useCallback(() => {
-    window.history.back();
-  }, []);
+  useBackButton(true, onClose);
 
-  useEffect(() => {
-    window.history.pushState({ tripDetail: true }, '');
-    const handlePop = () => {
-      onClose();
-    };
-    window.addEventListener('popstate', handlePop);
-    return () => {
-      window.removeEventListener('popstate', handlePop);
-    };
-  }, [onClose]);
+  const handleDeleteTrip = async () => {
+    await tripsApi.deleteTrip(trip.id);
+    onClose();
+  };
+  const { requestDelete: requestDeleteTrip, confirmDialog: tripConfirmDialog } = useDeleteRequest(trip.name, handleDeleteTrip);
 
   // Chronological sorting by departure date+time
   const sortedSegs = useMemo(() => {
@@ -162,7 +157,7 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
       <div className="w-full md:max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4">
         <div className="flex items-center gap-3 mb-4">
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform shrink-0"
             aria-label="Zurück"
           >
@@ -443,14 +438,12 @@ function TripDetail({ trip, onClose }: { trip: Trip; onClose: () => void }) {
         </div>
 
         <button
-          onClick={async () => {
-            await tripsApi.deleteTrip(trip.id);
-            onClose();
-          }}
+          onClick={requestDeleteTrip}
           className="w-full h-11 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-medium text-sm flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
         >
           <Trash2 size={16} /> Reise löschen
         </button>
+        {tripConfirmDialog}
       </div>
 
       <SuggestedRemindersSheet open={suggestSheet} onClose={() => setSuggestSheet(false)} trip={trip} segments={tripSegs} />
