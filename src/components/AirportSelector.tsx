@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, Check, X, MapPin } from 'lucide-react';
 import { searchAirports, Airport } from '@/lib/airportData';
+import { useBackButton } from '@/hooks/useBackButton';
 
 interface AirportSelectorProps {
   value: string;
@@ -13,6 +14,7 @@ export function AirportSelector({ value, code, onChange, placeholder = 'Flughafe
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  useBackButton(open, () => setOpen(false));
 
   useEffect(() => {
     if (open && inputRef.current) {

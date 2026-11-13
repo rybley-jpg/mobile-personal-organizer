@@ -15,14 +15,14 @@ import { Expenses } from '@/screens/Expenses';
 import { TravelDocs } from '@/screens/TravelDocs';
 import { getCountryFlag } from '@/lib/countryFlags';
 
-type Tab = 'heute' | 'reisen' | 'mappe' | 'finanzen' | 'mehr' | 'aufgaben' | 'kontakte';
+type Tab = 'heute' | 'reise' | 'mappe' | 'finanzen' | 'funktionen' | 'aufgaben' | 'kontakte';
 
 const TABS: { key: Tab; label: string; icon: typeof Home }[] = [
   { key: 'heute', label: 'Heute', icon: Home },
-  { key: 'reisen', label: 'Reisen', icon: Plane },
+  { key: 'reise', label: 'Reise', icon: Plane },
   { key: 'mappe', label: 'Mappe', icon: FolderOpen },
   { key: 'finanzen', label: 'Finanzen', icon: Wallet },
-  { key: 'mehr', label: 'Mehr', icon: LayoutGrid },
+  { key: 'funktionen', label: 'Funktionen', icon: LayoutGrid },
 ];
 
 function AppShell() {
@@ -73,12 +73,12 @@ function AppShell() {
       )}
       <main className="min-h-screen w-full md:max-w-2xl md:mx-auto lg:max-w-3xl pt-[env(safe-area-inset-top)] pb-[calc(80px+env(safe-area-inset-bottom))] relative z-10">
         {tab === 'heute' && <Dashboard onNavigate={(t) => setTab(t as Tab)} />}
-        {tab === 'reisen' && <Trips />}
+        {tab === 'reise' && <Trips />}
         {tab === 'mappe' && <TravelDocs />}
         {tab === 'finanzen' && <Expenses />}
-        {tab === 'mehr' && <More onNavigate={(t) => setTab(t as Tab)} onOpenSearch={() => setSearchOpen(true)} />}
-        {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('mehr')} />}
-        {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('mehr')} />}
+        {tab === 'funktionen' && <More onNavigate={(t) => setTab(t as Tab)} onOpenSearch={() => setSearchOpen(true)} />}
+        {tab === 'aufgaben' && <Tasks onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('funktionen')} />}
+        {tab === 'kontakte' && <Contacts onOpenSearch={() => setSearchOpen(true)} onBack={() => setTab('funktionen')} />}
       </main>
 
       {fabVisible && (
