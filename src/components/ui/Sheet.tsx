@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useBackButton } from '@/hooks/useBackButton';
 
 interface SheetProps {
   open: boolean;
@@ -10,10 +11,12 @@ interface SheetProps {
 }
 
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
+  useBackButton(open, onClose);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') window.history.back();
     };
     window.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
@@ -21,7 +24,7 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
       window.removeEventListener('keydown', handler);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

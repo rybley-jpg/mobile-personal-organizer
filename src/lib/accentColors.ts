@@ -157,8 +157,8 @@ export const ACCENT_PRESETS: AccentPreset[] = [
 
 export function applyAccentPreset(preset: AccentPreset) {
   const root = document.documentElement;
-  (Object.keys(preset.shades) as (keyof AccentPreset['shades'])[]).forEach((key) => {
-    root.style.setProperty(`--c-primary-${key}`, preset.shades[key]);
+  Object.entries(preset.shades).forEach(([key, value]) => {
+    root.style.setProperty(`--c-primary-${key}`, value);
   });
 }
 

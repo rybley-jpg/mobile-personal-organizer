@@ -35,7 +35,28 @@ export async function fetchExchangeRates(baseCurrency: string): Promise<Exchange
     throw new Error('Received malformed exchange rate data from the API.');
   }
 
+  try {
+    localStorage.setItem(ratesCacheKey(baseCurrency), JSON.stringify(data));
+  } catch {
+    // Speicher nicht verfügbar: Kurse werden dann nicht zwischengespeichert.
+  }
+
   return data;
+}
+
+function ratesCacheKey(base: string): string {
+  return `klarly.exchangeRates.${base}`;
+}
+
+export function getCachedRates(base: string): ExchangeRateResponse | null {
+  try {
+    const raw = localStorage.getItem(ratesCacheKey(base));
+    if (!raw) return null;
+    const data = JSON.parse(raw) as ExchangeRateResponse;
+    return data.base && data.rates && data.date ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 const FALLBACK_RATES: Record<string, number> = {

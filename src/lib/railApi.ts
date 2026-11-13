@@ -1,4 +1,5 @@
 import { TrainStatus } from '@/types';
+import { isOnline } from '@/lib/permissions';
 
 export interface TrainStatusData {
   status: TrainStatus;
@@ -28,6 +29,7 @@ class EdgeFunctionRailDataProvider implements RailDataProvider {
   }
 
   async getTrainStatus(trainNumber: string, date: string, station?: string): Promise<TrainStatusData | null> {
+    if (!isOnline()) return null;
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

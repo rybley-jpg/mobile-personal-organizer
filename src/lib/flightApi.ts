@@ -1,5 +1,6 @@
 import { FlightStatus } from '@/types';
 import { findAirlineByName } from '@/lib/airlineData';
+import { isOnline } from '@/lib/permissions';
 
 export interface FlightStatusData {
   status: FlightStatus | null;
@@ -25,6 +26,7 @@ export interface FlightDataProvider {
 
 class EdgeFunctionFlightDataProvider implements FlightDataProvider {
   async getFlightStatus(airlineIata: string, flightNumber: string, date: string, airlineIcao?: string): Promise<FlightStatusData | null> {
+    if (!isOnline()) return null;
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Trash2, ArrowLeft } from 'lucide-react';
 import { useOrganizer } from '@/context/OrganizerContext';
+import { useBackButton } from '@/hooks/useBackButton';
+import { useDeleteRequest } from '@/components/RemovableItem';
 import { TripSegment, SegmentType, TravelClass, TRAVEL_CLASS_LABELS, SEGMENT_TYPE_LABELS } from '@/types';
 import { AirlineSelector } from '@/components/AirlineSelector';
 import { AirportSelector } from '@/components/AirportSelector';
@@ -83,23 +85,14 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
-  const handleBack = useCallback(() => {
-    window.history.back();
-  }, []);
+  useBackButton(open, onClose);
 
   useEffect(() => {
     if (!open) {
       initializedRef.current = false;
       return;
     }
-    window.history.pushState({ segEditor: true }, '');
-    const handlePop = () => onClose();
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open || initializedRef.current) return;
+    if (initializedRef.current) return;
     initializedRef.current = true;
     setError(null);
     if (segment) {
@@ -210,6 +203,8 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
     }
   };
 
+  const { requestDelete, confirmDialog } = useDeleteRequest(segment?.title || 'Etappe', handleDelete);
+
   const isFlight = draft.segment_type === 'flug';
   const isTrain = draft.segment_type === 'bahn';
 
@@ -220,7 +215,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
       <div className="w-full md:max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4">
         <div className="flex items-center gap-3 mb-4">
           <button
-            onClick={handleBack}
+            onClick={onClose}
             className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition-transform shrink-0"
             aria-label="Zurück"
           >
@@ -229,7 +224,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
           <h1 className="text-xl font-bold text-slate-900 dark:text-white truncate flex-1">{segment ? 'Etappe bearbeiten' : 'Etappe hinzufügen'}</h1>
           {segment && (
             <button
-              onClick={handleDelete}
+              onClick={requestDelete}
               disabled={saving}
               className="h-10 w-10 rounded-full border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 flex items-center justify-center active:scale-95 transition-transform shrink-0 disabled:opacity-50"
               aria-label="Löschen"
@@ -237,6 +232,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
               <Trash2 size={18} />
             </button>
           )}
+          {confirmDialog}
         </div>
 
       <div className="space-y-4">
@@ -569,7 +565,7 @@ export function SegmentEditor({ open, onClose, tripId, segment }: SegmentEditorP
 
       <div className="flex gap-2 mt-4 mb-4">
         <button
-          onClick={handleBack}
+          onClick={onClose}
           className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           Abbrechen

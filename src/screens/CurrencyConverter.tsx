@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { X, ArrowDownUp, ChevronDown } from 'lucide-react';
-import { SUPPORTED_CURRENCIES, fetchExchangeRates, convertCurrency, getFallbackRates } from '@/lib/currencyApi';
+import { SUPPORTED_CURRENCIES, fetchExchangeRates, convertCurrency, getCachedRates, getFallbackRates, type ExchangeRateResponse } from '@/lib/currencyApi';
+import { isOnline } from '@/lib/permissions';
+import { useBackButton } from '@/hooks/useBackButton';
 
 interface CurrencyConverterProps {
   onClose: () => void;
@@ -13,29 +15,31 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
   const [rates, setRates] = useState<Record<string, number> | null>(null);
   const [rateDate, setRateDate] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
+  useBackButton(true, onClose);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setError(false);
-    fetchExchangeRates('EUR')
-      .then((data) => {
-        if (cancelled) return;
-        setRates({ ...data.rates, [data.base]: 1 });
-        setRateDate(data.date);
-        setUsingFallback(false);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        const fallback = getFallbackRates('EUR');
-        setRates({ ...fallback.rates, [fallback.base]: 1 });
-        setRateDate(fallback.date + ' (offline)');
-        setUsingFallback(true);
-        setLoading(false);
-      });
+    const applyRates = (data: ExchangeRateResponse, stale: boolean) => {
+      if (cancelled) return;
+      setRates({ ...data.rates, [data.base]: 1 });
+      setRateDate(stale ? `${data.date} (gespeichert)` : data.date);
+      setUsingFallback(stale);
+      setLoading(false);
+    };
+    const load = async () => {
+      if (isOnline()) {
+        try {
+          applyRates(await fetchExchangeRates('EUR'), false);
+          return;
+        } catch {
+          // Auf gespeicherte Kurse zurückfallen.
+        }
+      }
+      applyRates(getCachedRates('EUR') ?? getFallbackRates('EUR'), true);
+    };
+    void load();
     return () => {
       cancelled = true;
     };
@@ -131,11 +135,7 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 p-4 text-center">
-            <p className="text-sm text-red-600 dark:text-red-400">Wechselkurse momentan nicht verfügbar. Bitte überprüfe deine Internetverbindung.</p>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 text-center">
             <p className="text-sm text-slate-400 dark:text-slate-500 animate-pulse">Kurse werden geladen…</p>
           </div>
@@ -164,7 +164,7 @@ export function CurrencyConverter({ onClose }: CurrencyConverterProps) {
 
             <p className="text-center text-xs text-slate-400 dark:text-slate-600 pt-1">
               {usingFallback
-                ? 'Offline-Kurse (Richtwerte). Bei Internetverbindung werden aktuelle Kurse geladen.'
+                ? 'Offline-Kurse. Sobald du wieder online bist, werden aktuelle Kurse geladen.'
                 : 'Referenzkurse der Europäischen Zentralbank'}
             </p>
           </>

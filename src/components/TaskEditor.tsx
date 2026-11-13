@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trash2, Plus, Check, X, ListChecks } from 'lucide-react';
 import { Sheet } from '@/components/ui/Sheet';
+import { useDeleteRequest } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { useChecklist } from '@/hooks/useChecklist';
 import { useTaskCategories } from '@/hooks/useTaskCategories';
@@ -72,7 +73,7 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
     } else {
       setDraft({
         ...EMPTY_DRAFT,
-        category_ids: prefill?.category_id ? [prefill.category_id] : [],
+        category_ids: prefill?.category_ids ?? [],
         trip_id: defaultTripId ?? prefill?.trip_id ?? '',
       });
     }
@@ -149,6 +150,7 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
       setSaving(false);
     }
   };
+  const { requestDelete, confirmDialog } = useDeleteRequest(task?.title || 'Aufgabe', handleDelete);
 
   return (
     <Sheet
@@ -165,7 +167,7 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
           </button>
           {task && (
             <button
-              onClick={handleDelete}
+              onClick={requestDelete}
               disabled={saving}
               className="h-11 px-4 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-medium text-sm hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors flex items-center gap-1.5"
             >
@@ -402,6 +404,7 @@ export function TaskEditor({ open, onClose, task, defaultTripId, prefill }: Task
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
+      {confirmDialog}
     </Sheet>
   );
 }

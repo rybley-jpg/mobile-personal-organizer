@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plane, ExternalLink, Calendar, Clock, MapPin, Ticket, Armchair, Luggage, Building, AlertTriangle, CheckCircle2, Bell, BellRing, Trash2, MessageSquare } from 'lucide-react';
+import { Plane, ExternalLink, Calendar, Clock, MapPin, Ticket, Armchair, Luggage, Building, AlertTriangle, CheckCircle2, Bell, BellRing, MessageSquare } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
 import { TripSegment, CheckInReminderOffset, CHECKIN_REMINDER_LABELS } from '@/types';
 import { Sheet } from '@/components/ui/Sheet';
 import { FlightStatusBadge, GateChangeAlert, DelayInfo, LiveUpdateInfo } from '@/components/FlightStatusBadge';
@@ -88,7 +89,7 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
 
   return (
     <>
-      <Sheet open={open && !checkinSheetOpen} onClose={onClose} title="Flugdetails">
+      <Sheet open={open} onClose={onClose} title="Flugdetails">
         <div className="space-y-5">
           {/* Airline header */}
           <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-primary-600 p-5 text-white shadow-lg shadow-sky-500/20">
@@ -216,8 +217,8 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
                     : n.notification_type === 'boarding' ? <Plane size={15} className="text-sky-500" />
                     : <Bell size={15} className="text-slate-400" />;
                   return (
+                    <RemovableItem key={n.id} label={n.message} onDelete={() => deleteNotification(n.id)}>
                     <div
-                      key={n.id}
                       className={`flex items-start gap-2.5 rounded-xl p-3 ${
                         n.is_read
                           ? 'bg-slate-50 dark:bg-slate-800/40'
@@ -231,13 +232,8 @@ export function FlightDetail({ segment, open, onClose, tripName }: FlightDetailP
                           {new Date(n.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr
                         </p>
                       </div>
-                      <button
-                        onClick={() => deleteNotification(n.id)}
-                        className="shrink-0 p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
+                    </RemovableItem>
                   );
                 })}
               </div>

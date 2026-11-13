@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { FileText, Image, File, Trash2, Plus, Shield, Upload } from 'lucide-react';
+import { FileText, Image, File, Plus, Shield, Upload } from 'lucide-react';
+import { RemovableItem } from '@/components/RemovableItem';
 import { useWallet } from '@/hooks/useWallet';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { WalletLock } from '@/components/WalletLock';
@@ -120,10 +121,8 @@ export function WalletPanel({ tripId }: { tripId: string }) {
           ) : (
             <div className="space-y-2 mb-3">
               {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-800 p-3"
-                >
+                <RemovableItem key={doc.id} label={doc.label} onDelete={() => handleDelete(doc.id)}>
+                <div className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-800 p-3">
                   <span className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0">
                     {getDocIcon(doc.doc_type)}
                   </span>
@@ -131,13 +130,8 @@ export function WalletPanel({ tripId }: { tripId: string }) {
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.label}</p>
                     <p className="text-xs text-slate-400 truncate">{doc.file_name}</p>
                   </div>
-                  <button
-                    onClick={() => handleDelete(doc.id)}
-                    className="shrink-0 p-1.5 text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
                 </div>
+                </RemovableItem>
               ))}
             </div>
           )}

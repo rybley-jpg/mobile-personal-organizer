@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Plus, Phone, Mail, Trash2, Building2, Search as SearchIcon, ContactRound, ArrowLeft } from 'lucide-react';
+import { Plus, Phone, Mail, Building2, Search as SearchIcon, ContactRound, ArrowLeft } from 'lucide-react';
+import { useDeleteRequest } from '@/components/RemovableItem';
 import { useOrganizer } from '@/context/OrganizerContext';
 import { Contact } from '@/types';
 import { Sheet } from '@/components/ui/Sheet';
-import { Capacitor } from '@capacitor/core';
-import { Contacts as ContactsPlugin } from '@capacitor/contacts';
+import { requestContacts, pickContact } from '@/lib/permissions';
 
 interface ContactsProps {
   onOpenSearch: () => void;
@@ -97,6 +97,11 @@ export function Contacts({ onOpenSearch, onBack }: ContactsProps) {
 
 function ContactDetail({ contact, onClose }: { contact: Contact; onClose: () => void }) {
   const { contactsApi } = useOrganizer();
+  const handleDelete = async () => {
+    await contactsApi.deleteContact(contact.id);
+    onClose();
+  };
+  const { requestDelete, confirmDialog } = useDeleteRequest(contact.name, handleDelete);
   return (
     <Sheet open={!!contact} onClose={onClose} title={contact.name}>
       <div className="space-y-4">
@@ -150,15 +155,13 @@ function ContactDetail({ contact, onClose }: { contact: Contact; onClose: () => 
         )}
 
         <button
-          onClick={async () => {
-            await contactsApi.deleteContact(contact.id);
-            onClose();
-          }}
+          onClick={requestDelete}
           className="w-full h-11 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 font-medium text-sm flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
         >
-          <Trash2 size={16} /> Kontakt löschen
+          Kontakt löschen
         </button>
       </div>
+      {confirmDialog}
     </Sheet>
   );
 }
@@ -191,38 +194,31 @@ function AddContactSheet({ open, onClose }: { open: boolean; onClose: () => void
 
   const pickFromAddressBook = async () => {
     setPickError(null);
-    try {
-      if (!Capacitor.isNativePlatform()) {
-        setPickError('Adressbuch-Zugriff nur auf dem Handy verfügbar.');
-        return;
-      }
-      const perm = await ContactsPlugin.requestPermissions();
-      if (perm.contacts !== 'granted') {
-        setPickError('Zugriff auf Adressbuch verweigert.');
-        return;
-      }
-      const result = await ContactsPlugin.pickContact();
-      const c = result.contact;
-      const name = [c.givenName, c.familyName].filter(Boolean).join(' ').trim() || c.displayName?.trim() || '';
-      if (!name) {
-        setPickError('Kein Name im gewählten Kontakt gefunden.');
-        return;
-      }
-      const phone = c.phoneNumbers?.[0]?.number ?? '';
-      const email = c.emails?.[0]?.address ?? '';
-      const org = c.organizationName ?? '';
-      setForm({
-        name,
-        organization: org,
-        phone,
-        phone_alt: c.phoneNumbers?.[1]?.number ?? '',
-        email,
-        category: '',
-        notes: '',
-      });
-    } catch {
-      setPickError('Kontakt konnte nicht ausgewählt werden.');
+    const access = await requestContacts();
+    if (!access.ok) {
+      setPickError(access.error);
+      return;
     }
+    const picked = await pickContact();
+    if (!picked.ok) {
+      if (picked.error !== 'Auswahl abgebrochen.') setPickError(picked.error);
+      return;
+    }
+    const c = picked.data;
+    const name = [c.name?.givenName, c.name?.familyName].filter(Boolean).join(' ').trim() || c.displayName?.trim() || '';
+    if (!name) {
+      setPickError('Kein Name im gewählten Kontakt gefunden.');
+      return;
+    }
+    setForm({
+      name,
+      organization: c.organizations?.[0]?.name ?? '',
+      phone: c.phoneNumbers?.[0]?.value ?? '',
+      phone_alt: c.phoneNumbers?.[1]?.value ?? '',
+      email: c.emails?.[0]?.value ?? '',
+      category: '',
+      notes: '',
+    });
   };
 
   return (

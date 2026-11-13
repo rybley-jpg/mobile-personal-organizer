@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useBackButton } from '@/hooks/useBackButton';
 
 const SKIP_KEY = 'klarly_skip_delete_confirm';
 
@@ -31,6 +32,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const [skipFuture, setSkipFuture] = useState(false);
+  useBackButton(open, onCancel);
 
   useEffect(() => {
     if (open) setSkipFuture(false);
